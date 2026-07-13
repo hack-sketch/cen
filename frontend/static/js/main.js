@@ -8,11 +8,12 @@ import RegisterView from "./views/RegisterView.js";
 
 import ResidentDashboard from "./views/ResidentDashboard.js";
 import CommunityEvents from "./views/CommunityEvents.js";
+import Events from "./views/Events.js"
 import EventDetails from "./views/EventDetails.js";
-import CommunityResources from "./views/CommunityResources.js";
+import CommunityResources from "./views/Resources.js";
 import ResourceDetails from "./views/ResourceDetails.js";
 import VolunteerActivities from "./views/VolunteerActivities.js";
-import CommunitySkills from "./views/CommunitySkills.js";
+import CommunitySkills from "./views/Skills.js";
 import CreditWallet from "./views/Wallet.js";
 import ResidentProfile from "./views/Profile.js";
 
@@ -72,7 +73,7 @@ const routes = {
 
     // Resident
     "#/resident": ResidentDashboard,
-    "#/resident/events": CommunityEvents,
+    "#/resident/events": Events,
     "#/resident/event": EventDetails,
     "#/resident/resources": CommunityResources,
     "#/resident/resource": ResourceDetails,

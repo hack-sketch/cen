@@ -1,278 +1,125 @@
 export default {
 
-    data() {
+  data() {
+    return {
+      search: "",
+      skills: [
+        { id: 1, name: "Python Programming", category: "Technology", credits: 25, duration: "2 Hours", status: "Active" },
+        { id: 2, name: "Web Development", category: "Technology", credits: 30, duration: "3 Hours", status: "Active" },
+        { id: 3, name: "Yoga Classes", category: "Fitness", credits: 15, duration: "1 Hour", status: "Inactive" },
+        { id: 4, name: "Photography", category: "Arts", credits: 20, duration: "2 Hours", status: "Active" }
+      ]
+    };
+  },
 
-        return {
+  computed: {
+    filteredSkills() {
+      return this.skills.filter(skill =>
+        skill.name.toLowerCase().includes(this.search.toLowerCase()) ||
+        skill.category.toLowerCase().includes(this.search.toLowerCase())
+      );
+    }
+  },
 
-            search: "",
-
-            skills: [
-
-                {
-                    id: 1,
-                    name: "Python Programming",
-                    category: "Technology",
-                    credits: 25,
-                    duration: "2 Hours",
-                    status: "Active"
-                },
-
-                {
-                    id: 2,
-                    name: "Web Development",
-                    category: "Technology",
-                    credits: 30,
-                    duration: "3 Hours",
-                    status: "Active"
-                },
-
-                {
-                    id: 3,
-                    name: "Yoga Classes",
-                    category: "Fitness",
-                    credits: 15,
-                    duration: "1 Hour",
-                    status: "Inactive"
-                },
-
-                {
-                    id: 4,
-                    name: "Photography",
-                    category: "Arts",
-                    credits: 20,
-                    duration: "2 Hours",
-                    status: "Active"
-                }
-
-            ]
-
-        };
-
+  methods: {
+    addSkill() {
+      window.location.hash = "#/provider/add-skill";
     },
-
-    computed: {
-
-        filteredSkills() {
-
-            return this.skills.filter(skill =>
-
-                skill.name.toLowerCase().includes(this.search.toLowerCase()) ||
-
-                skill.category.toLowerCase().includes(this.search.toLowerCase())
-
-            );
-
-        }
-
+    editSkill(skill) {
+      alert("Edit " + skill.name);
     },
-
-    methods: {
-
-        addSkill() {
-
-            window.location.hash = "#/provider/add-skill";
-
-        },
-
-        editSkill(skill) {
-
-            alert("Edit " + skill.name);
-
-        },
-
-        toggleStatus(skill) {
-
-            skill.status =
-                skill.status === "Active"
-                ? "Inactive"
-                : "Active";
-
-        },
-
-        deleteSkill(skill) {
-
-            if(confirm("Delete this skill?")){
-
-                this.skills = this.skills.filter(
-                    s => s.id !== skill.id
-                );
-
-            }
-
-        }
-
+    toggleStatus(skill) {
+      skill.status = skill.status === "Active" ? "Inactive" : "Active";
     },
-
-    template: `
-
-<div>
-
-<nav class="navbar navbar-expand-lg navbar-dark bg-success">
-
-<div class="container-fluid">
-
-<a
-class="navbar-brand fw-bold"
-href="#/provider">
-
-Skill Provider Portal
-
-</a>
-
-<button
-class="btn btn-outline-light"
-onclick="window.location.hash='#/login'">
-
-Logout
-
-</button>
-
-</div>
-
-</nav>
-
-
-<div class="container mt-4">
-
-<div class="d-flex justify-content-between align-items-center mb-4">
-
-<h2>
-
-My Skills
-
-</h2>
-
-<div>
-
-<button
-class="btn btn-success me-2"
-@click="addSkill">
-
-Add Skill
-
-</button>
-
-<a
-href="#/provider"
-class="btn btn-secondary">
-
-Back
-
-</a>
-
-</div>
-
-</div>
-
-
-<div class="card shadow">
-
-<div class="card-body">
-
-<input
-class="form-control mb-3"
-placeholder="Search Skills..."
-v-model="search">
-
-
-<table class="table table-hover table-bordered">
-
-<thead class="table-success">
-
-<tr>
-
-<th>ID</th>
-
-<th>Skill</th>
-
-<th>Category</th>
-
-<th>Credits</th>
-
-<th>Duration</th>
-
-<th>Status</th>
-
-<th>Actions</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr
-v-for="skill in filteredSkills"
-:key="skill.id">
-
-<td>{{skill.id}}</td>
-
-<td>{{skill.name}}</td>
-
-<td>{{skill.category}}</td>
-
-<td>{{skill.credits}}</td>
-
-<td>{{skill.duration}}</td>
-
-<td>
-
-<span
-class="badge"
-:class="skill.status==='Active'
-?'bg-success'
-:'bg-danger'">
-
-{{skill.status}}
-
-</span>
-
-</td>
-
-<td>
-
-<button
-class="btn btn-primary btn-sm me-1"
-@click="editSkill(skill)">
-
-Edit
-
-</button>
-
-<button
-class="btn btn-warning btn-sm me-1"
-@click="toggleStatus(skill)">
-
-{{skill.status==="Active"
-? "Deactivate"
-: "Activate"}}
-
-</button>
-
-<button
-class="btn btn-danger btn-sm"
-@click="deleteSkill(skill)">
-
-Delete
-
-</button>
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-`
-
-}
+    deleteSkill(skill) {
+      if (confirm("Delete this skill?")) {
+        this.skills = this.skills.filter(s => s.id !== skill.id);
+      }
+    }
+  },
+
+  template: `
+  <div>
+
+    <!-- Navbar with Sidebar Toggle -->
+    <nav class="navbar navbar-dark bg-danger shadow-sm">
+      <div class="container-fluid">
+        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#providerSidebar">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand fw-bold ms-2" href="#/provider">Skill Provider Portal</a>
+        <button class="btn btn-outline-light btn-sm ms-auto"
+                onclick="window.location.hash='#/login'">Logout</button>
+      </div>
+    </nav>
+
+    <!-- Sidebar Offcanvas -->
+    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="providerSidebar" style="width:220px;">
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title fw-bold text-danger">Menu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+      </div>
+      <div class="offcanvas-body p-0">
+        <div class="list-group list-group-flush">
+          <a href="#/provider" class="list-group-item list-group-item-action">Dashboard</a>
+          <a href="#/provider/skills" class="list-group-item list-group-item-action active">My Skills</a>
+          <a href="#/provider/add-skill" class="list-group-item list-group-item-action">Add Skill</a>
+          <a href="#/provider/bookings" class="list-group-item list-group-item-action">Bookings</a>
+          <a href="#/provider/history" class="list-group-item list-group-item-action">Teaching History</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="fw-bold">My Skills</h2>
+        <button class="btn btn-danger btn-sm fw-semibold" @click="addSkill">+ Add Skill</button>
+      </div>
+
+      <div class="card shadow rounded-4">
+        <div class="card-body p-3">
+          <input class="form-control mb-3" placeholder="Search Skills..." v-model="search">
+
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-danger text-white">
+              <tr>
+                <th>ID</th>
+                <th>Skill</th>
+                <th>Category</th>
+                <th>Credits</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="skill in filteredSkills" :key="skill.id">
+                <td>{{ skill.id }}</td>
+                <td>{{ skill.name }}</td>
+                <td>{{ skill.category }}</td>
+                <td>{{ skill.credits }}</td>
+                <td>{{ skill.duration }}</td>
+                <td>
+                  <span class="badge"
+                        :class="skill.status==='Active' ? 'bg-success' : 'bg-danger'">
+                    {{ skill.status }}
+                  </span>
+                </td>
+                <td>
+                  <button class="btn btn-primary btn-sm me-2" @click="editSkill(skill)">Edit</button>
+                  <button class="btn btn-warning btn-sm me-2" @click="toggleStatus(skill)">
+                    {{ skill.status === "Active" ? "Deactivate" : "Activate" }}
+                  </button>
+                  <button class="btn btn-danger btn-sm" @click="deleteSkill(skill)">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  `
+};
