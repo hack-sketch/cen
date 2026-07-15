@@ -29,39 +29,8 @@ export default {
   <div>
 
     <!-- Navbar with Sidebar Toggle -->
-    <nav class="navbar navbar-dark bg-success shadow-sm">
-      <div class="container-fluid">
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold ms-2" href="#/resident">
-          🌐 Community Exchange Network
-        </a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">
-          Logout
-        </button>
-      </div>
-    </nav>
-
-    <!-- Sidebar Offcanvas -->
-    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="sidebarMenu" style="width:220px;">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title fw-bold text-success">Menu</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-0">
-        <div class="list-group list-group-flush">
-          <a href="#/resident" class="list-group-item list-group-item-action">Dashboard</a>
-          <a href="#/resident/events" class="list-group-item list-group-item-action">Events</a>
-          <a href="#/resident/resources" class="list-group-item list-group-item-action active">Resources</a>
-          <a href="#/resident/volunteers" class="list-group-item list-group-item-action">Volunteers</a>
-          <a href="#/resident/skills" class="list-group-item list-group-item-action">Skill Exchange</a>
-          <a href="#/resident/wallet" class="list-group-item list-group-item-action">Credit Wallet</a>
-          <a href="#/resident/profile" class="list-group-item list-group-item-action">Profile</a>
-        </div>
-      </div>
-    </div>
+    <app-navbar title="Resident Portal" rolePath="#/resident"></app-navbar>
+    <app-sidebar role="resident" activePage="Resources"></app-sidebar>
 
     <!-- Main Content -->
     <div class="container mt-4">

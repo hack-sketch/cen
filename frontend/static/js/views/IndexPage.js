@@ -79,6 +79,44 @@ export default {
       </div>
     </section>
 
+    <!-- Community Tools -->
+    <section class="container py-5">
+      <h2 class="text-center mb-5 fw-bold">Community Tools</h2>
+      <div class="row g-4 text-center">
+
+        <div class="col-md-4">
+          <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body">
+              <h4>📋 Notice Board</h4>
+              <p>Read and post community notices.</p>
+              <a href="#/login" class="btn btn-sm btn-outline-primary">Visit</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body">
+              <h4>💬 Chat</h4>
+              <p>Connect with community members.</p>
+              <a href="#/login" class="btn btn-sm btn-outline-primary">Start</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body">
+              <h4>🚨 Report Issues</h4>
+              <p>File and track community complaints.</p>
+              <a href="#/login" class="btn btn-sm btn-outline-primary">Report</a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
     <!-- Footer -->
     <footer class="bg-success text-white text-center py-3">
       <p class="mb-0">© 2026 Community Exchange Network</p>

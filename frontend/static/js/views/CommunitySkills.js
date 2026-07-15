@@ -3,11 +3,13 @@ export default {
   data() {
     return {
       search: "",
+      selectedSkill: null,
+      remarks: "",
       skills: [
-        { id: 1, skill: "Yoga Classes", provider: "Priya Patel", category: "Fitness", credits: 15, status: "Active" },
-        { id: 2, skill: "Python Programming", provider: "Amit Mehta", category: "Technology", credits: 25, status: "Active" },
-        { id: 3, skill: "Guitar Lessons", provider: "Rahul Shah", category: "Music", credits: 20, status: "Inactive" },
-        { id: 4, skill: "Cooking Workshop", provider: "Neha Joshi", category: "Cooking", credits: 10, status: "Active" }
+        { id: 1, skill: "Yoga Classes", provider: "Priya Patel", category: "Fitness", credits: 15, status: "Active", remarks: "" },
+        { id: 2, skill: "Python Programming", provider: "Amit Mehta", category: "Technology", credits: 25, status: "Active", remarks: "" },
+        { id: 3, skill: "Guitar Lessons", provider: "Rahul Shah", category: "Music", credits: 20, status: "Inactive", remarks: "" },
+        { id: 4, skill: "Cooking Workshop", provider: "Neha Joshi", category: "Cooking", credits: 10, status: "Active", remarks: "" }
       ]
     };
   },
@@ -23,16 +25,33 @@ export default {
   },
 
   methods: {
-    editSkill(skill) {
-      alert("Edit Skill : " + skill.skill);
-    },
-    toggleStatus(skill) {
-      skill.status = skill.status === "Active" ? "Inactive" : "Active";
-    },
-    deleteSkill(skill) {
-      if (confirm("Delete this skill?")) {
-        this.skills = this.skills.filter(s => s.id !== skill.id);
+    approve(skill) {
+      if (!this.remarks.trim()) {
+        alert("Please enter remarks before approving.");
+        return;
       }
+      skill.remarks = this.remarks;
+      skill.status = "Approved";
+      this.selectedSkill = null;
+      this.remarks = "";
+    },
+    reject(skill) {
+      if (!this.remarks.trim()) {
+        alert("Please enter remarks before rejecting.");
+        return;
+      }
+      skill.remarks = this.remarks;
+      skill.status = "Rejected";
+      this.selectedSkill = null;
+      this.remarks = "";
+    },
+    openRemarksModal(skill) {
+      this.selectedSkill = skill;
+      this.remarks = skill.remarks || "";
+    },
+    closeRemarksModal() {
+      this.selectedSkill = null;
+      this.remarks = "";
     }
   },
 
@@ -40,41 +59,12 @@ export default {
   <div>
 
     <!-- Navbar with Sidebar Toggle -->
-    <nav class="navbar navbar-dark bg-dark shadow-sm">
-      <div class="container-fluid">
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#adminSidebar">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold ms-2" href="#/admin">CEN Admin Panel</a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">Logout</button>
-      </div>
-    </nav>
-
-    <!-- Sidebar Offcanvas -->
-    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="adminSidebar" style="width:220px;">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title fw-bold text-dark">Menu</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-0">
-        <div class="list-group list-group-flush">
-          <a href="#/admin" class="list-group-item list-group-item-action">Dashboard</a>
-          <a href="#/admin/residents" class="list-group-item list-group-item-action">Residents</a>
-          <a href="#/admin/events" class="list-group-item list-group-item-action">Events</a>
-          <a href="#/admin/resources" class="list-group-item list-group-item-action">Resources</a>
-          <a href="#/admin/skills" class="list-group-item list-group-item-action active">Skills</a>
-          <a href="#/admin/volunteers" class="list-group-item list-group-item-action">Volunteer Activities</a>
-          <a href="#/admin/analytics" class="list-group-item list-group-item-action">Analytics</a>
-          <a href="#/admin/reports" class="list-group-item list-group-item-action">Reports</a>
-          <a href="#/admin/settings" class="list-group-item list-group-item-action">Settings</a>
-        </div>
-      </div>
-    </div>
-
+    <app-navbar title="Coordinator Panel" rolePath="#/coord"></app-navbar>
+    <app-sidebar role="coordinator" activePage="Skills"></app-sidebar>
+    
     <!-- Main Content -->
     <div class="container mt-4">
-      <h2 class="fw-bold mb-4">Community Skills</h2>
+      <h2 class="fw-bold mb-4">Community Skills Approvals</h2>
 
       <div class="card shadow rounded-4">
         <div class="card-body p-3">
@@ -89,6 +79,7 @@ export default {
                 <th>Category</th>
                 <th>Credits</th>
                 <th>Status</th>
+                <th>Remarks</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -101,20 +92,42 @@ export default {
                 <td>{{ skill.credits }}</td>
                 <td>
                   <span class="badge"
-                        :class="skill.status==='Active' ? 'bg-success' : 'bg-danger'">
+                        :class="{
+                          'bg-success': skill.status==='Approved',
+                          'bg-danger': skill.status==='Rejected',
+                          'bg-warning': skill.status==='Active'
+                        }">
                     {{ skill.status }}
                   </span>
                 </td>
+                <td>{{ skill.remarks || "-" }}</td>
                 <td>
-                  <button class="btn btn-primary btn-sm me-2" @click="editSkill(skill)">Edit</button>
-                  <button class="btn btn-warning btn-sm me-2" @click="toggleStatus(skill)">
-                    {{ skill.status==='Active' ? 'Deactivate' : 'Activate' }}
-                  </button>
-                  <button class="btn btn-danger btn-sm" @click="deleteSkill(skill)">Delete</button>
+                  <button v-if="skill.status==='Active'" class="btn btn-success btn-sm me-2" @click="openRemarksModal(skill)" data-bs-toggle="modal" data-bs-target="#remarksModal">Approve</button>
+                  <button v-if="skill.status==='Active'" class="btn btn-danger btn-sm" @click="openRemarksModal(skill)" data-bs-toggle="modal" data-bs-target="#remarksModal">Reject</button>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Remarks Modal -->
+    <div class="modal fade" id="remarksModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ selectedSkill ? selectedSkill.skill : '' }} - Enter Remarks</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" @click="closeRemarksModal"></button>
+          </div>
+          <div class="modal-body">
+            <textarea v-model="remarks" class="form-control" placeholder="Enter remarks..." rows="4"></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="closeRemarksModal">Cancel</button>
+            <button v-if="selectedSkill" type="button" class="btn btn-success me-2" data-bs-dismiss="modal" @click="approve(selectedSkill)">Approve</button>
+            <button v-if="selectedSkill" type="button" class="btn btn-danger" data-bs-dismiss="modal" @click="reject(selectedSkill)">Reject</button>
+          </div>
         </div>
       </div>
     </div>

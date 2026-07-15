@@ -2,6 +2,10 @@ export default {
 
   data() {
     return {
+      isGenerating: false,
+      showAiBox: false,
+      aiError: null,
+      aiTags: [],
       skill: {
         name: "",
         category: "",
@@ -15,19 +19,61 @@ export default {
   },
 
   methods: {
-    saveSkill() {
-      alert("Skill added successfully!");
-      window.location.hash = "#/provider/skills";
+    async generateAiSuggestions() {
+      if (!this.skill.name || !this.skill.description) {
+        alert("Please enter a Skill Name and Description first.");
+        return;
+      }
+
+      this.isGenerating = true;
+      this.aiError = null;
+      this.showAiBox = false;
+
+      try {
+        // Ready for the backend API connection
+        const response = await axios.post("http://localhost:5000/api/ai/suggest-skill", {
+          name: this.skill.name,
+          description: this.skill.description
+        });
+
+        // Auto-fill the form with the backend's response
+        this.skill.category = response.data.category;
+        this.skill.credits = response.data.credits;
+        this.aiTags = response.data.tags;
+        
+        this.showAiBox = true;
+      } catch (error) {
+        console.error("Failed to fetch AI suggestions:", error);
+        this.aiError = "AI service is currently unavailable.";
+      } finally {
+        this.isGenerating = false;
+      }
     },
+
+    async saveSkill() {
+      // Backend integration for saving the skill
+      try {
+        await axios.post("http://localhost:5000/api/skills", this.skill);
+        alert("Skill added successfully!");
+        window.location.hash = "#/provider/skills";
+      } catch (error) {
+        alert("Failed to save skill. Please try again.");
+        console.error(error);
+      }
+    },
+    
     resetForm() {
-      this.skill = {
-        name: "",
-        category: "",
-        description: "",
-        duration: "",
-        credits: "",
-        level: "",
-        status: "Active"
+      this.showAiBox = false;
+      this.aiTags = [];
+      this.aiError = null;
+      this.skill = { 
+        name: "", 
+        category: "", 
+        description: "", 
+        duration: "", 
+        credits: "", 
+        level: "", 
+        status: "Active" 
       };
     }
   },
@@ -36,33 +82,8 @@ export default {
   <div>
 
     <!-- Navbar with Sidebar Toggle -->
-    <nav class="navbar navbar-dark bg-danger shadow-sm">
-      <div class="container-fluid">
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#providerSidebar">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold ms-2" href="#/provider">Skill Provider Portal</a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">Logout</button>
-      </div>
-    </nav>
-
-    <!-- Sidebar Offcanvas -->
-    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="providerSidebar" style="width:220px;">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title fw-bold text-danger">Menu</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-0">
-        <div class="list-group list-group-flush">
-          <a href="#/provider" class="list-group-item list-group-item-action">Dashboard</a>
-          <a href="#/provider/skills" class="list-group-item list-group-item-action">My Skills</a>
-          <a href="#/provider/add-skill" class="list-group-item list-group-item-action active">Add Skill</a>
-          <a href="#/provider/bookings" class="list-group-item list-group-item-action">Bookings</a>
-          <a href="#/provider/history" class="list-group-item list-group-item-action">Teaching History</a>
-        </div>
-      </div>
-    </div>
+    <app-navbar title="Skill Provider Portal" rolePath="#/provider"></app-navbar>
+    <app-sidebar role="provider" activePage="Add Skill"></app-sidebar>
 
     <!-- Main Content -->
     <div class="container mt-4">
@@ -99,6 +120,26 @@ export default {
               <div class="mb-2">
                 <label class="form-label small fw-semibold">Description</label>
                 <textarea rows="3" class="form-control form-control-sm" v-model="skill.description" placeholder="Describe your skill"></textarea>
+              </div>
+
+              <!-- AI Trigger Button -->
+              <div class="d-grid mb-3">
+                <button type="button" class="btn text-white fw-semibold shadow-sm" style="background-color: #5b4b8a;" @click="generateAiSuggestions" :disabled="isGenerating">
+                  <span v-if="isGenerating" class="spinner-border spinner-border-sm me-2"></span>
+                  {{ isGenerating ? 'Analyzing with AI...' : '✨ Suggest Smart Price & Tags' }}
+                </button>
+              </div>
+
+              <!-- Error Message -->
+              <div v-if="aiError" class="alert alert-danger py-2 small">{{ aiError }}</div>
+
+              <!-- Purple AI Results Box -->
+              <div v-if="showAiBox" class="p-3 mb-3 rounded-4 border border-dashed" style="background-color: #ece9f5; border-color: #b7abdd; color: #4a3d73;">
+                <h6 class="fw-bold mb-1" style="color: #5b4b8a;">🔮 AI Optimization Success</h6>
+                <p class="small mb-2">Based on your description, we've adjusted the category and applied optimal pricing tags.</p>
+                <div class="d-flex flex-wrap gap-2">
+                  <span v-for="tag in aiTags" :key="tag" class="badge" style="background-color: #5b4b8a;">#{{ tag }}</span>
+                </div>
               </div>
 
               <div class="row">

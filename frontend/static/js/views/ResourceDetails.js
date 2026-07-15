@@ -62,18 +62,8 @@ export default {
   template: `
   <div>
 
-    <!-- Navbar -->
-    <nav class="navbar navbar-dark bg-success shadow-sm">
-      <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="#/resident">
-          🌐 Community Exchange Network
-        </a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">
-          Logout
-        </button>
-      </div>
-    </nav>
+    <app-navbar title="Resident Portal" rolePath="#/resident"></app-navbar>
+    <app-sidebar role="resident" activePage="Resources"></app-sidebar>
 
     <!-- Main Content -->
     <div class="container mt-4" v-if="resource">

@@ -21,37 +21,8 @@ export default {
   <div>
 
     <!-- Navbar with Sidebar Toggle -->
-    <nav class="navbar navbar-dark bg-primary shadow-sm">
-      <div class="container-fluid">
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#ownerSidebar">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold ms-2" href="#/owner">
-          Resource Owner Portal
-        </a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">
-          Logout
-        </button>
-      </div>
-    </nav>
-
-    <!-- Sidebar Offcanvas -->
-    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="ownerSidebar" style="width:220px;">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title fw-bold text-primary">Menu</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-0">
-        <div class="list-group list-group-flush">
-          <a href="#/owner" class="list-group-item list-group-item-action active">Dashboard</a>
-          <a href="#/owner/resources" class="list-group-item list-group-item-action">My Resources</a>
-          <a href="#/owner/add-resource" class="list-group-item list-group-item-action">Add Resource</a>
-          <a href="#/owner/requests" class="list-group-item list-group-item-action">Borrow Requests</a>
-          <a href="#/owner/history" class="list-group-item list-group-item-action">Borrow History</a>
-        </div>
-      </div>
-    </div>
+    <app-navbar title="Resource Owner Portal" rolePath="#/owner"></app-navbar>
+    <app-sidebar role="owner" activePage="Dashboard"></app-sidebar>
 
     <!-- Main Content -->
     <div class="container mt-4">

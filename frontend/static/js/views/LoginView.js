@@ -40,6 +40,7 @@ export default {
                 <option value="resident">Resident</option>
                 <option value="owner">Resource Owner</option>
                 <option value="provider">Skill Provider</option>
+                <option value="coordinator">Coordinator</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -89,7 +90,9 @@ export default {
       this.loading = true;
       setTimeout(() => {
         this.loading = false;
-        window.location.hash = "#/" + this.role;
+        // Map coordinator to the new #/coord route, others stay the same
+        const path = this.role === 'coordinator' ? '#/coord' : '#/' + this.role;
+        window.location.hash = path;
       }, 800);
     }
   }

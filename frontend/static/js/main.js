@@ -3,6 +3,7 @@
 import IndexPage from "./views/IndexPage.js";
 import LoginView from "./views/LoginView.js";
 import RegisterView from "./views/RegisterView.js";
+import AiOnboarding from "./views/AiOnboarding.js";
 
 // ---------------- Resident Views ----------------
 
@@ -16,10 +17,12 @@ import VolunteerActivities from "./views/VolunteerActivities.js";
 import CommunitySkills from "./views/Skills.js";
 import CreditWallet from "./views/Wallet.js";
 import ResidentProfile from "./views/Profile.js";
+import ProposeEvent from "./views/ProposeEvent.js";
 
-// ---------------- Admin Views ----------------
+// ---------------- Admin / Coord Views ----------------
 
 import AdminDashboard from "./views/AdminDashboard.js";
+import CoordinatorDashboard from "./views/CoordinatorDashboard.js";
 import Residents from "./views/Residents.js";
 import CommunityEventsAdmin from "./views/CommunityEventsAdmin.js";
 import CommunityResourcesAdmin from "./views/CommunityResources.js";
@@ -45,35 +48,39 @@ import AddSkill from "./views/AddSkill.js";
 import Bookings from "./views/Bookings.js";
 import TeachingHistory from "./views/TeachingHistory.js";
 
+// ---------------- Additional Modules ----------------
+
+import NoticeBoard from "./views/NoticeBoard.js";
+import Chat from "./views/Chat.js";
+import ComplaintResolutionSystem from "./views/ComplaintResolutionSystem.js";
+
+import Navbar from "./components/Navbar.js";
+import Sidebar from "./components/Sidebar.js";
 
 // ---------------- Axios Interceptor ----------------
 
 axios.interceptors.request.use((config) => {
-
     const token = localStorage.getItem("token");
-
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
-
     return config;
-
 });
-
 
 // ---------------- Routes ----------------
 
 const routes = {
-
     // Common
     "": IndexPage,
     "#/": IndexPage,
     "#/login": LoginView,
     "#/register": RegisterView,
+    "#/onboarding": AiOnboarding,
 
     // Resident
     "#/resident": ResidentDashboard,
     "#/resident/events": Events,
+    "#/resident/propose-event": ProposeEvent,
     "#/resident/event": EventDetails,
     "#/resident/resources": CommunityResources,
     "#/resident/resource": ResourceDetails,
@@ -81,17 +88,29 @@ const routes = {
     "#/resident/skills": CommunitySkills,
     "#/resident/wallet": CreditWallet,
     "#/resident/profile": ResidentProfile,
+    "#/resident/notice-board": NoticeBoard,
+    "#/resident/chat": Chat,
+    "#/resident/complaints": ComplaintResolutionSystem,
 
     // Admin
     "#/admin": AdminDashboard,
     "#/admin/residents": Residents,
-    "#/admin/events": CommunityEventsAdmin,
-    "#/admin/resources": CommunityResourcesAdmin,
-    "#/admin/skills": CommunitySkillsAdmin,
-    "#/admin/volunteers": VolunteerManagement,
     "#/admin/analytics": CreditAnalytics,
     "#/admin/reports": Reports,
     "#/admin/settings": Settings,
+    "#/admin/notice-board": NoticeBoard,
+    "#/admin/chat": Chat,
+    "#/admin/complaints": ComplaintResolutionSystem,
+
+    // Coordinator
+    "#/coord": CoordinatorDashboard,
+    "#/coord/events": CommunityEventsAdmin,
+    "#/coord/resources": CommunityResourcesAdmin,
+    "#/coord/skills": CommunitySkillsAdmin,
+    "#/coord/volunteers": VolunteerManagement,
+    "#/coord/notice-board": NoticeBoard,
+    "#/coord/chat": Chat,
+    "#/coord/complaints": ComplaintResolutionSystem,
 
     // Resource Owner
     "#/owner": ResourceOwnerDashboard,
@@ -99,56 +118,45 @@ const routes = {
     "#/owner/add-resource": AddResource,
     "#/owner/requests": BorrowRequests,
     "#/owner/history": ResourceHistory,
+    "#/owner/notice-board": NoticeBoard,
+    "#/owner/chat": Chat,
+    "#/owner/complaints": ComplaintResolutionSystem,
 
     // Skill Provider
     "#/provider": SkillProviderDashboard,
     "#/provider/skills": MySkills,
     "#/provider/add-skill": AddSkill,
     "#/provider/bookings": Bookings,
-    "#/provider/history": TeachingHistory
-
+    "#/provider/history": TeachingHistory,
+    "#/provider/notice-board": NoticeBoard,
+    "#/provider/chat": Chat,
+    "#/provider/complaints": ComplaintResolutionSystem
 };
-
 
 // ---------------- Vue App ----------------
 
 const app = Vue.createApp({
-
     data() {
-
         return {
-
             currentView: IndexPage
-
         };
-
     },
-
     created() {
-
         this.loadView();
-
-        window.addEventListener(
-            "hashchange",
-            this.loadView
-        );
-
+        window.addEventListener("hashchange", this.loadView);
     },
-
     methods: {
-
         loadView() {
-
-            this.currentView =
-                routes[window.location.hash] || IndexPage;
-
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            const backdrops = document.querySelectorAll('.offcanvas-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+            this.currentView = routes[window.location.hash] || IndexPage;
         }
-
     }
-
 });
 
-
 // ---------------- Mount ----------------
-
+app.component('app-navbar', Navbar);
+app.component('app-sidebar', Sidebar);
 app.mount("#app");

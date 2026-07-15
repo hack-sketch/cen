@@ -23,60 +23,18 @@ export default {
   },
 
   methods: {
-    editResource(resource) {
-      alert("Edit Resource : " + resource.name);
-    },
-    removeResource(resource) {
-      if (confirm("Remove this resource?")) {
-        this.resources = this.resources.filter(r => r.id !== resource.id);
-      }
-    },
-    changeStatus(resource) {
-      if (resource.status === "Available") resource.status = "Maintenance";
-      else if (resource.status === "Maintenance") resource.status = "Borrowed";
-      else resource.status = "Available";
-    }
   },
 
   template: `
   <div>
 
     <!-- Navbar with Sidebar Toggle -->
-    <nav class="navbar navbar-dark bg-dark shadow-sm">
-      <div class="container-fluid">
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#adminSidebar">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold ms-2" href="#/admin">CEN Admin Panel</a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">Logout</button>
-      </div>
-    </nav>
-
-    <!-- Sidebar Offcanvas -->
-    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="adminSidebar" style="width:220px;">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title fw-bold text-dark">Menu</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-0">
-        <div class="list-group list-group-flush">
-          <a href="#/admin" class="list-group-item list-group-item-action">Dashboard</a>
-          <a href="#/admin/residents" class="list-group-item list-group-item-action">Residents</a>
-          <a href="#/admin/events" class="list-group-item list-group-item-action">Events</a>
-          <a href="#/admin/resources" class="list-group-item list-group-item-action active">Resources</a>
-          <a href="#/admin/skills" class="list-group-item list-group-item-action">Skills</a>
-          <a href="#/admin/volunteers" class="list-group-item list-group-item-action">Volunteer Activities</a>
-          <a href="#/admin/analytics" class="list-group-item list-group-item-action">Analytics</a>
-          <a href="#/admin/reports" class="list-group-item list-group-item-action">Reports</a>
-          <a href="#/admin/settings" class="list-group-item list-group-item-action">Settings</a>
-        </div>
-      </div>
-    </div>
+    <app-navbar title="Coordinator Panel" rolePath="#/coord"></app-navbar>
+    <app-sidebar role="coordinator" activePage="Resources"></app-sidebar>
 
     <!-- Main Content -->
     <div class="container mt-4">
-      <h2 class="fw-bold mb-4">Community Resources</h2>
+      <h2 class="fw-bold mb-4">Community Resources Queue</h2>
 
       <div class="card shadow rounded-4">
         <div class="card-body p-3">
@@ -90,7 +48,6 @@ export default {
                 <th>Owner</th>
                 <th>Category</th>
                 <th>Status</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -108,11 +65,6 @@ export default {
                         }">
                     {{ resource.status }}
                   </span>
-                </td>
-                <td>
-                  <button class="btn btn-primary btn-sm me-2" @click="editResource(resource)">Edit</button>
-                  <button class="btn btn-warning btn-sm me-2" @click="changeStatus(resource)">Change Status</button>
-                  <button class="btn btn-danger btn-sm" @click="removeResource(resource)">Delete</button>
                 </td>
               </tr>
             </tbody>

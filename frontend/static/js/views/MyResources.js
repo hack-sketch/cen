@@ -3,11 +3,12 @@ export default {
   data() {
     return {
       search: "",
+      selectedResource: null,
       resources: [
-        { id: 1, name: "Projector", category: "Electronics", condition: "Excellent", status: "Available" },
-        { id: 2, name: "Camping Tent", category: "Outdoor", condition: "Good", status: "Borrowed" },
-        { id: 3, name: "Speaker System", category: "Audio", condition: "Very Good", status: "Available" },
-        { id: 4, name: "Cricket Kit", category: "Sports", condition: "Good", status: "Maintenance" }
+        { id: 1, name: "Projector", category: "Electronics", condition: "Excellent", status: "Available", borrower: null, overdueDate: null },
+        { id: 2, name: "Camping Tent", category: "Outdoor", condition: "Good", status: "Borrowed", borrower: "Jignesh Bhai", overdueDate: "18 Jul 2026", isOverdue: true },
+        { id: 3, name: "Speaker System", category: "Audio", condition: "Very Good", status: "Available", borrower: null, overdueDate: null },
+        { id: 4, name: "Cricket Kit", category: "Sports", condition: "Good", status: "Maintenance", borrower: null, overdueDate: null }
       ]
     };
   },
@@ -41,6 +42,20 @@ export default {
       } else {
         resource.status = "Available";
       }
+    },
+    reportOverdue(resource) {
+      this.selectedResource = resource;
+    },
+    sendReminder(resource) {
+      alert(`Reminder sent to ${resource.borrower} to return "${resource.name}"`);
+      this.selectedResource = null;
+    },
+    escalateIssue(resource) {
+      alert(`Issue escalated: "${resource.name}" not returned by ${resource.borrower} since ${resource.overdueDate}`);
+      this.selectedResource = null;
+    },
+    closeOverdueModal() {
+      this.selectedResource = null;
     }
   },
 
@@ -48,39 +63,10 @@ export default {
   <div>
 
     <!-- Navbar with Sidebar Toggle -->
-    <nav class="navbar navbar-dark bg-primary shadow-sm">
-      <div class="container-fluid">
-        <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#ownerSidebar">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <a class="navbar-brand fw-bold ms-2" href="#/owner">
-          Resource Owner Portal
-        </a>
-        <button class="btn btn-outline-light btn-sm ms-auto"
-                onclick="window.location.hash='#/login'">
-          Logout
-        </button>
-      </div>
-    </nav>
-
-    <!-- Sidebar Offcanvas -->
-    <div class="offcanvas offcanvas-start rounded-4 shadow-lg" tabindex="-1" id="ownerSidebar" style="width:220px;">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title fw-bold text-primary">Menu</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-0">
-        <div class="list-group list-group-flush">
-          <a href="#/owner" class="list-group-item list-group-item-action">Dashboard</a>
-          <a href="#/owner/resources" class="list-group-item list-group-item-action active">My Resources</a>
-          <a href="#/owner/add-resource" class="list-group-item list-group-item-action">Add Resource</a>
-          <a href="#/owner/requests" class="list-group-item list-group-item-action">Borrow Requests</a>
-          <a href="#/owner/history" class="list-group-item list-group-item-action">Borrow History</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Content -->
+    <app-navbar title="Resource Owner Portal" rolePath="#/owner"></app-navbar>
+    <app-sidebar role="owner" activePage="My Resources"></app-sidebar>
+ 
+<!-- Main Content -->
     <div class="container mt-4">
       <h2 class="fw-bold mb-4">My Resources</h2>
 
@@ -100,6 +86,8 @@ export default {
                 <th>Category</th>
                 <th>Condition</th>
                 <th>Status</th>
+                <th>Borrower</th>
+                <th>Overdue</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -119,14 +107,43 @@ export default {
                     {{ resource.status }}
                   </span>
                 </td>
+                <td>{{ resource.borrower || "-" }}</td>
+                <td v-if="resource.isOverdue">
+                  <span class="badge bg-danger">{{ resource.overdueDate }}</span>
+                </td>
+                <td v-else>-</td>
                 <td>
-                  <button class="btn btn-primary btn-sm me-2" @click="editResource(resource)">Edit</button>
-                  <button class="btn btn-warning btn-sm me-2" @click="changeStatus(resource)">Status</button>
-                  <button class="btn btn-danger btn-sm" @click="deleteResource(resource)">Delete</button>
+                  <button v-if="!resource.isOverdue" class="btn btn-primary btn-sm me-2" @click="editResource(resource)">Edit</button>
+                  <button v-if="!resource.isOverdue" class="btn btn-warning btn-sm me-2" @click="changeStatus(resource)">Status</button>
+                  <button v-if="!resource.isOverdue" class="btn btn-danger btn-sm" @click="deleteResource(resource)">Delete</button>
+                  <button v-if="resource.isOverdue" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#overdueModal" @click="reportOverdue(resource)">Handle Overdue</button>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overdue Item Modal -->
+    <div class="modal fade" id="overdueModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Handle Overdue Item</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" @click="closeOverdueModal"></button>
+          </div>
+          <div v-if="selectedResource" class="modal-body">
+            <p><strong>Resource:</strong> {{ selectedResource.name }}</p>
+            <p><strong>Borrower:</strong> {{ selectedResource.borrower }}</p>
+            <p><strong>Overdue Since:</strong> {{ selectedResource.overdueDate }}</p>
+            <p class="text-danger"><strong>This item was not returned on time!</strong></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="closeOverdueModal">Cancel</button>
+            <button v-if="selectedResource" type="button" class="btn btn-warning me-2" data-bs-dismiss="modal" @click="sendReminder(selectedResource)">Send Reminder</button>
+            <button v-if="selectedResource" type="button" class="btn btn-danger" data-bs-dismiss="modal" @click="escalateIssue(selectedResource)">Escalate Issue</button>
+          </div>
         </div>
       </div>
     </div>
