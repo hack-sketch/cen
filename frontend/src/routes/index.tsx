@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { ScrollReveal } from "@/components/ui/scroll-reveal";
 import {
   Carousel,
@@ -9,6 +9,10 @@ import {
   CarouselPrevious,
   type CarouselApi,
 } from "@/components/ui/carousel";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Sparkles, Play, Pause } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,19 +28,174 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
+const AI_FEATURES = [
+  {
+    title: "AI Profile Generator",
+    description: "Analyzes your background to instantly draft skill listings, complete with smart tags and credit rates.",
+    code: "AI Engine v2.0 · Profile"
+  },
+  {
+    title: "OCR Identity Verification",
+    description: "Cross-checks resident ID card details against municipal database records for secure, instant onboarding.",
+    code: "AI Engine v2.0 · Onboard"
+  },
+  {
+    title: "AI Auto-Match Barter",
+    description: "Interprets notice boards to intelligently bridge barter trades between neighbors with complementary needs.",
+    code: "AI Engine v2.0 · Match"
+  }
+];
+
+const POPULAR_SKILLS = [
+  {
+    id: 1,
+    title: "Python Tutoring",
+    type: "SKILL",
+    image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&h=400&q=80",
+    rating: "4.9",
+    description: "Learn basic automation and data analysis in personalized 1-on-1 sessions.",
+    owner: "Aman S.",
+    avatarBg: "from-deep-forest to-soft-violet",
+    rate: "25 Crd/hr",
+    needs: "Looking for: Backyard gardening tools & soil setups"
+  },
+  {
+    id: 2,
+    title: "Power Drill Kit",
+    type: "RESOURCE",
+    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&h=400&q=80",
+    rating: "5.0",
+    description: "Heavy-duty hammer drill for weekend home improvement projects. Multiple bits included.",
+    owner: "Rohit K.",
+    avatarBg: "from-amber-200 to-soft-violet",
+    rate: "10 Crd/day",
+    needs: "Looking for: High-school math exam prep help"
+  },
+  {
+    id: 3,
+    title: "Guitar Lessons",
+    type: "SKILL",
+    image: "https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=600&h=400&q=80",
+    rating: "4.8",
+    description: "Acoustic guitar for absolute beginners. Focus on basic chords and rhythm.",
+    owner: "Jignesh P.",
+    avatarBg: "from-soft-violet to-deep-forest",
+    rate: "30 Crd/hr",
+    needs: "Looking for: Plumber for kitchen sink pipe alignment"
+  }
+];
+
+interface AnimatedCountProps {
+  target: number;
+  duration?: number;
+  suffix?: string;
+}
+
+function AnimatedCount({ target, duration = 2000, suffix = "" }: AnimatedCountProps) {
+  const [count, setCount] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
+  const elementRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasStarted(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (elementRef.current) {
+      observer.observe(elementRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!hasStarted) return;
+
+    let startTimestamp: number | null = null;
+    let animationFrameId: number;
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      const easeOutProgress = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.floor(easeOutProgress * target));
+      if (progress < 1) {
+        animationFrameId = window.requestAnimationFrame(step);
+      }
+    };
+
+    animationFrameId = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [hasStarted, target, duration]);
+
+  const formatCountValue = (val: number): string => {
+    if (val < 1000) {
+      return val.toString();
+    } else if (val <= 10000) {
+      const kVal = val / 1000;
+      const formatted = kVal.toFixed(1);
+      return formatted.endsWith(".0") ? `${formatted.slice(0, -2)}k` : `${formatted}k`;
+    } else {
+      const kVal = Math.floor(val / 1000);
+      return `${kVal}k`;
+    }
+  };
+
+  return (
+    <span ref={elementRef}>
+      {formatCountValue(count)}
+      {suffix}
+    </span>
+  );
+}
+
 function Landing() {
+  const { user, logout } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [heroApi, setHeroApi] = useState<CarouselApi>();
   const [currentHeroSlide, setCurrentHeroSlide] = useState(0);
+  const [aiIndex, setAiIndex] = useState(0);
+  const [simStep, setSimStep] = useState(0);
+  const [isAutoplay, setIsAutoplay] = useState(true);
+
+  useEffect(() => {
+    if (!isAutoplay) return;
+    const timer = setInterval(() => {
+      setSimStep((prev) => (prev + 1) % 4);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [isAutoplay]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAiIndex((prev) => (prev + 1) % AI_FEATURES.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 50) {
+      const winScroll = window.scrollY;
+      if (winScroll > 50) {
         setIsScrolled(true);
       } else {
         setIsScrolled(false);
       }
+
+      // Parallax bg blob shifts
+      const blob1 = document.getElementById("bg-blob-1");
+      const blob2 = document.getElementById("bg-blob-2");
+      const blob3 = document.getElementById("bg-blob-3");
+      if (blob1) blob1.style.transform = `translateY(${winScroll * 0.08}px)`;
+      if (blob2) blob2.style.transform = `translateY(${winScroll * -0.06}px)`;
+      if (blob3) blob3.style.transform = `translateY(${winScroll * 0.05}px)`;
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
@@ -138,16 +297,34 @@ function Landing() {
 
           {/* Desktop Action Buttons (Professional, Compact Size) */}
           <div className="hidden md:flex gap-3 items-center">
-            <Link to="/login">
-              <button className="text-sm text-on-surface-variant hover:text-primary transition-colors px-3 py-1.5 font-medium cursor-pointer">
-                Login
-              </button>
-            </Link>
-            <Link to="/signup">
-              <button className="bg-primary text-white hover:bg-primary/95 text-xs font-semibold px-4 h-[34px] rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer">
-                Sign Up
-              </button>
-            </Link>
+            {user ? (
+              <>
+                <Link to="/app/dashboard">
+                  <button className="text-sm text-on-surface-variant hover:text-primary transition-colors px-3 py-1.5 font-medium cursor-pointer">
+                    Console Dashboard
+                  </button>
+                </Link>
+                <button 
+                  onClick={logout} 
+                  className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-4 h-[34px] rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <button className="text-sm text-on-surface-variant hover:text-primary transition-colors px-3 py-1.5 font-medium cursor-pointer">
+                    Login
+                  </button>
+                </Link>
+                <Link to="/signup">
+                  <button className="bg-primary text-white hover:bg-primary/95 text-xs font-semibold px-4 h-[34px] rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer">
+                    Sign Up
+                  </button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -236,24 +413,46 @@ function Landing() {
           </div>
 
           {/* Action Buttons at the Bottom */}
-          <div className="flex flex-col gap-3 mt-8 border-t border-line/40 pt-6">
-            <Link to="/login" className="w-full">
+          {user ? (
+            <div className="flex flex-col gap-3 mt-8 border-t border-line/40 pt-6">
+              <Link to="/app/dashboard" className="w-full">
+                <button
+                  className="w-full border border-line text-on-surface-variant hover:text-primary hover:bg-panel text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-all"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Console Dashboard
+                </button>
+              </Link>
               <button
-                className="w-full border border-line text-on-surface-variant hover:text-primary hover:bg-panel text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-all"
-                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-full bg-rose-600 text-white text-xs font-semibold py-2.5 rounded-lg shadow-sm cursor-pointer hover:bg-rose-700 transition-all"
+                onClick={() => {
+                  logout();
+                  setIsMobileMenuOpen(false);
+                }}
               >
-                Login
+                Logout
               </button>
-            </Link>
-            <Link to="/signup" className="w-full">
-              <button
-                className="w-full bg-primary text-white text-xs font-semibold py-2.5 rounded-lg shadow-sm cursor-pointer hover:bg-primary/95 transition-all"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Sign Up
-              </button>
-            </Link>
-          </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 mt-8 border-t border-line/40 pt-6">
+              <Link to="/login" className="w-full">
+                <button
+                  className="w-full border border-line text-on-surface-variant hover:text-primary hover:bg-panel text-xs font-semibold py-2.5 rounded-lg cursor-pointer transition-all"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Login
+                </button>
+              </Link>
+              <Link to="/signup" className="w-full">
+                <button
+                  className="w-full bg-primary text-white text-xs font-semibold py-2.5 rounded-lg shadow-sm cursor-pointer hover:bg-primary/95 transition-all"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Sign Up
+                </button>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -591,7 +790,7 @@ function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
             <ScrollReveal delay={0} duration={600} className="relative group">
               <div className="font-headline-lg text-4xl text-deep-forest mb-1.5 group-hover:scale-105 transition-transform font-bold">
-                500+
+                <AnimatedCount target={500} suffix="+" />
               </div>
               <div className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">
                 Active Members
@@ -599,7 +798,7 @@ function Landing() {
             </ScrollReveal>
             <ScrollReveal delay={150} duration={600} className="relative group md:border-x border-line/30">
               <div className="font-headline-lg text-4xl text-soft-violet mb-1.5 group-hover:scale-105 transition-transform font-bold">
-                2.5k
+                <AnimatedCount target={2500} />
               </div>
               <div className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">
                 Exchanges Completed
@@ -607,7 +806,7 @@ function Landing() {
             </ScrollReveal>
             <ScrollReveal delay={300} duration={600} className="relative group">
               <div className="font-headline-lg text-4xl text-deep-forest/80 mb-1.5 group-hover:scale-105 transition-transform font-bold">
-                15k
+                <AnimatedCount target={15000} />
               </div>
               <div className="text-[11px] text-on-surface-variant uppercase tracking-widest font-bold">
                 Credits Circulated
@@ -684,6 +883,256 @@ function Landing() {
               </div>
             </ScrollReveal>
           </div>
+
+          {/* Interactive Trade Simulator Block */}
+          <ScrollReveal delay={100} duration={600}>
+            <div className="mt-16 bg-panel/35 border border-line/70 p-6 sm:p-8 rounded-[2rem] shadow-sm relative overflow-hidden backdrop-blur-md">
+              <style>{`
+                @keyframes sim-dash {
+                  to {
+                    stroke-dashoffset: -20;
+                  }
+                }
+                .animate-sim-dash {
+                  animation: sim-dash 0.8s linear infinite;
+                }
+                @keyframes fadeIn {
+                  from {
+                    opacity: 0;
+                    transform: translateY(3px);
+                  }
+                  to {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+                .animate-fade-in {
+                  animation: fadeIn 0.3s ease-out forwards;
+                }
+              `}</style>
+              
+              <div className="flex justify-between items-center gap-4 mb-8">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 py-1 px-3 bg-soft-violet/10 text-soft-violet font-metadata text-[9.5px] rounded-full tracking-wider uppercase font-bold border border-soft-violet/20">
+                    <Sparkles className="h-3 w-3 animate-pulse" /> Live Barter Simulator
+                  </span>
+                  <h3 className="font-bold text-xl sm:text-2xl text-ink mt-2">CEN Timebank Exchange Loop</h3>
+                  <p className="text-xs sm:text-sm text-on-surface-variant mt-1">See how neighbors barter services and swap credits without spending cash.</p>
+                </div>
+                <div className="flex items-center">
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => {
+                      setIsAutoplay((p) => !p);
+                    }}
+                    className={cn(
+                      "h-9 w-9 rounded-full border-line-strong hover:bg-panel cursor-pointer active:scale-95 transition-all flex items-center justify-center flex-shrink-0 shadow-sm",
+                      isAutoplay ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "text-on-surface-variant"
+                    )}
+                    title={isAutoplay ? "Pause Autoplay" : "Start Autoplay"}
+                  >
+                    {isAutoplay ? (
+                      <Pause className="h-4.5 w-4.5" />
+                    ) : (
+                      <Play className="h-4.5 w-4.5 fill-current" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Simulation Neighbors Cards Grid */}
+              <div className="relative">
+                {/* SVG Connection Paths (Only on desktop) */}
+                <div className="absolute inset-0 pointer-events-none hidden md:block z-0">
+                  <svg className="w-full h-full" viewBox="0 0 900 240" fill="none" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="flow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
+                        <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.8" />
+                        <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.8" />
+                      </linearGradient>
+                    </defs>
+                    
+                    {/* Path 1: Raj (Col 3) pays Aman (Col 1) -- Arch Curve Over */}
+                    <path 
+                      d="M 750,90 C 600,-20 300,-20 150,90" 
+                      stroke={simStep === 1 ? "url(#flow-grad)" : "#e2e8f0"} 
+                      strokeWidth={simStep === 1 ? "3.5" : "1.5"}
+                      strokeDasharray={simStep === 1 ? "8 6" : "none"}
+                      className={cn(
+                        "transition-all duration-500",
+                        simStep === 1 && "animate-sim-dash"
+                      )}
+                    />
+
+                    {/* Path 2: Aman (Col 1) pays Meera (Col 2) -- Curve Under */}
+                    <path 
+                      d="M 150,110 C 220,170 380,170 450,110" 
+                      stroke={simStep === 2 ? "url(#flow-grad)" : "#e2e8f0"} 
+                      strokeWidth={simStep === 2 ? "3.5" : "1.5"}
+                      strokeDasharray={simStep === 2 ? "8 6" : "none"}
+                      className={cn(
+                        "transition-all duration-500",
+                        simStep === 2 && "animate-sim-dash"
+                      )}
+                    />
+
+                    {/* Path 3: Meera (Col 2) pays Raj (Col 3) -- Curve Under */}
+                    <path 
+                      d="M 450,110 C 520,170 680,170 750,110" 
+                      stroke={simStep === 3 ? "url(#flow-grad)" : "#e2e8f0"} 
+                      strokeWidth={simStep === 3 ? "3.5" : "1.5"}
+                      strokeDasharray={simStep === 3 ? "8 6" : "none"}
+                      className={cn(
+                        "transition-all duration-500",
+                        simStep === 3 && "animate-sim-dash"
+                      )}
+                    />
+                  </svg>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                  {/* Neighbor 1: Aman */}
+                  <div className={cn(
+                    "p-5 rounded-2xl bg-white border transition-all duration-500 flex flex-col justify-between h-44 shadow-sm",
+                    simStep === 1 ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500" :
+                    simStep === 2 ? "border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-400" :
+                    "border-line/60"
+                  )}>
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full border border-line overflow-hidden">
+                          <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=64&h=64&q=80" alt="Aman S." className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-ink">Aman S.</div>
+                          <div className="text-[10px] text-on-surface-variant font-medium">Offers: Gardening</div>
+                        </div>
+                      </div>
+                      <div className="mt-3.5 text-xs text-on-surface-variant leading-relaxed">
+                        {simStep === 0 && "Wants: Math tutoring for daughter"}
+                        {simStep === 1 && <span className="text-emerald-700 font-bold">Earned +15 credits for Gardening!</span>}
+                        {simStep === 2 && <span className="text-amber-800 font-bold">Spent 20 credits on Math tutoring.</span>}
+                        {simStep === 3 && "Wants met. Balance settled."}
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-line/20">
+                      <span className="text-[10px] uppercase font-bold text-on-surface-variant">Credits</span>
+                      <span className="font-bold text-sm text-ink">
+                        {simStep === 0 && "50 Credits"}
+                        {simStep === 1 && "65 Credits"}
+                        {simStep === 2 && "45 Credits"}
+                        {simStep === 3 && "45 Credits"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Neighbor 2: Meera */}
+                  <div className={cn(
+                    "p-5 rounded-2xl bg-white border transition-all duration-500 flex flex-col justify-between h-44 shadow-sm",
+                    simStep === 2 ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500" :
+                    simStep === 3 ? "border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-400" :
+                    "border-line/60"
+                  )}>
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full border border-line overflow-hidden">
+                          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=64&h=64&q=80" alt="Meera V." className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-ink">Meera V.</div>
+                          <div className="text-[10px] text-on-surface-variant font-medium">Offers: Math Tutoring</div>
+                        </div>
+                      </div>
+                      <div className="mt-3.5 text-xs text-on-surface-variant leading-relaxed">
+                        {simStep === 0 && "Wants: Kitchen Sink Plumb repair"}
+                        {simStep === 1 && "Waiting for trade exchange..."}
+                        {simStep === 2 && <span className="text-emerald-700 font-bold">Earned +20 credits for Tutoring!</span>}
+                        {simStep === 3 && <span className="text-amber-800 font-bold">Spent 15 credits on Plumbing.</span>}
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-line/20">
+                      <span className="text-[10px] uppercase font-bold text-on-surface-variant">Credits</span>
+                      <span className="font-bold text-sm text-ink">
+                        {simStep === 0 && "30 Credits"}
+                        {simStep === 1 && "30 Credits"}
+                        {simStep === 2 && "50 Credits"}
+                        {simStep === 3 && "35 Credits"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Neighbor 3: Raj */}
+                  <div className={cn(
+                    "p-5 rounded-2xl bg-white border transition-all duration-500 flex flex-col justify-between h-44 shadow-sm",
+                    simStep === 3 ? "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500" :
+                    simStep === 1 ? "border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-400" :
+                    "border-line/60"
+                  )}>
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full border border-line overflow-hidden">
+                          <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=64&h=64&q=80" alt="Raj K." className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-ink">Raj K.</div>
+                          <div className="text-[10px] text-on-surface-variant font-medium">Offers: Plumbing</div>
+                        </div>
+                      </div>
+                      <div className="mt-3.5 text-xs text-on-surface-variant leading-relaxed">
+                        {simStep === 0 && "Wants: Backyard Herb Garden Setup"}
+                        {simStep === 1 && <span className="text-amber-800 font-bold">Spent 15 credits on Gardening.</span>}
+                        {simStep === 2 && "Waiting for trade exchange..."}
+                        {simStep === 3 && <span className="text-emerald-700 font-bold">Earned +15 credits for Plumbing!</span>}
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-line/20">
+                      <span className="text-[10px] uppercase font-bold text-on-surface-variant">Credits</span>
+                      <span className="font-bold text-sm text-ink">
+                        {simStep === 0 && "45 Credits"}
+                        {simStep === 1 && "30 Credits"}
+                        {simStep === 2 && "30 Credits"}
+                        {simStep === 3 && "45 Credits"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Narration Banner with Fixed Height and Keyed Fade-In to Prevent Reflow Shift Glitches */}
+              <div className="mt-6 p-4 rounded-xl bg-deep-forest/5 border border-deep-forest/10 flex items-start gap-3 min-h-[92px] sm:min-h-[76px] transition-all duration-300">
+                <div className="w-6 h-6 rounded-full bg-deep-forest/15 text-deep-forest flex items-center justify-center flex-shrink-0 text-xs font-bold">
+                  {simStep === 0 && "1"}
+                  {simStep === 1 && "2"}
+                  {simStep === 2 && "3"}
+                  {simStep === 3 && "✓"}
+                </div>
+                <div key={simStep} className="text-xs text-on-surface-variant leading-relaxed animate-fade-in">
+                  {simStep === 0 && (
+                    <span>
+                      <b>Initial State:</b> Three neighbors have individual needs but don't want to spend real cash. Tapping the Play/Pause button controls the autoplay loop.
+                    </span>
+                  )}
+                  {simStep === 1 && (
+                    <span>
+                      <b>Transaction 1:</b> Aman helps Raj build a backyard Herb Garden. Raj transfers <b>15 credits</b> to Aman. The SVG path lights up carrying animated credit flows from Raj to Aman.
+                    </span>
+                  )}
+                  {simStep === 2 && (
+                    <span>
+                      <b>Transaction 2:</b> Aman uses credits earned to hire Meera for math tutoring for his daughter. Aman transfers <b>20 credits</b> to Meera.
+                    </span>
+                  )}
+                  {simStep === 3 && (
+                    <span>
+                      <b>Circular Loop Complete!</b> Meera spends her tutoring credits to hire Raj to fix her kitchen sink leak (<b>15 credits</b>). All neighbors got their chores done, <b>$0 cash spent</b>, and credit balances returned to equilibrium!
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -798,22 +1247,49 @@ function Landing() {
                 identifies latent skills and matches them with community needs in
                 real-time.
               </p>
-              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-line/50 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1 bg-soft-violet"></div>
-                <div className="absolute top-5 right-6 font-code-sm text-xs text-soft-violet/60">
-                  AI ENGINE V2.0
+              <div className="bg-gradient-to-br from-white via-white to-soft-violet/[0.04] p-7 sm:p-9 rounded-2xl border border-soft-violet/15 shadow-[0_12px_30px_-4px_rgba(91,75,138,0.06)] relative overflow-hidden min-h-[230px] flex flex-col justify-between group">
+                {/* Glow decor */}
+                <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full bg-soft-violet/10 blur-3xl pointer-events-none group-hover:bg-soft-violet/15 transition-all duration-700"></div>
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-soft-violet/40 via-soft-violet to-soft-violet/40"></div>
+                
+                <div key={aiIndex} className="animate-card-slide space-y-3.5">
+                  <div className="flex justify-between items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <h4 className="font-headline-sm text-soft-violet uppercase text-[10px] tracking-widest font-extrabold">
+                        {AI_FEATURES[aiIndex].title}
+                      </h4>
+                    </div>
+                    <span className="font-code-sm text-[8.5px] text-soft-violet font-bold uppercase tracking-wider bg-soft-violet/5 px-2.5 py-0.5 rounded-full border border-soft-violet/10 flex-shrink-0">
+                      {AI_FEATURES[aiIndex].code}
+                    </span>
+                  </div>
+                  
+                  <div className="relative pl-3 border-l-2 border-soft-violet/20">
+                    <p className="font-body-lg text-[13px] text-on-surface-variant leading-relaxed pr-2 font-medium tracking-wide">
+                      {AI_FEATURES[aiIndex].description}
+                    </p>
+                  </div>
                 </div>
-                <h4 className="font-headline-sm text-soft-violet mb-3 uppercase text-sm tracking-wider font-semibold">
-                  Magic Setup
-                </h4>
-                <p className="font-body-lg text-sm text-on-surface italic leading-relaxed mb-6">
-                  "Our AI analyzes your bio and professional background to suggest the
-                  perfect skill listings. Setup your profile in seconds."
-                </p>
-                <div className="flex gap-2">
-                  <div className="h-1.5 w-12 bg-soft-violet rounded-full"></div>
-                  <div className="h-1.5 w-12 bg-soft-violet/20 rounded-full"></div>
-                  <div className="h-1.5 w-12 bg-soft-violet/20 rounded-full"></div>
+
+                <div className="flex justify-between items-center pt-4 border-t border-line/40 mt-4">
+                  <div className="flex items-center gap-1.5">
+                    {AI_FEATURES.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setAiIndex(i)}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all duration-500 ease-out cursor-pointer",
+                          aiIndex === i ? "bg-soft-violet w-7" : "bg-soft-violet/15 w-1.5 hover:bg-soft-violet/30"
+                        )}
+                        title={`Slide ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[9px] text-on-surface-variant font-bold uppercase tracking-wider">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Engine Active
+                  </div>
                 </div>
               </div>
             </ScrollReveal>
@@ -894,157 +1370,85 @@ function Landing() {
               </Link>
             </ScrollReveal>
           </div>
+
+          {/* Dynamic Grid of Filtered Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {/* Skill Card 1 */}
-            <ScrollReveal delay={0} duration={600} className="h-full">
-              <div className="bg-white rounded-[1.5rem] overflow-hidden border border-line/60 hover:shadow-lg transition-all duration-500 group flex flex-col h-full">
-                <div className="h-56 relative overflow-hidden">
-                  <img
-                    alt="Tutoring"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    src="https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=600&h=400&q=80"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-ink/20 to-transparent"></div>
-                  <div className="absolute top-4 right-4 px-3 py-1 bg-white/95 backdrop-blur-md rounded-lg text-[10px] font-bold text-deep-forest shadow-sm border border-white">
-                    SKILL
+            {POPULAR_SKILLS.map((item, idx) => (
+              <ScrollReveal key={item.id} delay={idx * 75} duration={500} className="h-full">
+                <div className="bg-white rounded-[1.5rem] overflow-hidden border border-line/60 hover:shadow-lg transition-all duration-500 group flex flex-col h-full relative">
+                  
+                  {/* Card Image Area */}
+                  <div className="h-56 relative overflow-hidden">
+                    <img
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      src={item.image}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-ink/35 to-transparent"></div>
+                    
+                    {/* Badge */}
+                    <div className={cn(
+                      "absolute top-4 right-4 px-3 py-1 bg-white/95 backdrop-blur-md rounded-lg text-[10px] font-bold shadow-sm border border-white",
+                      item.type === "SKILL" ? "text-deep-forest" : "text-soft-violet"
+                    )}>
+                      {item.type}
+                    </div>
+
+                    {/* Complementary Trade Overlay Panel (Revealed on hover) */}
+                    <div className="absolute inset-x-0 bottom-0 p-4 bg-white/90 backdrop-blur-md border-t border-line/40 translate-y-[101%] group-hover:translate-y-0 transition-transform duration-500 ease-out flex flex-col gap-1.5 z-10 shadow-[0_-5px_15px_rgba(0,0,0,0.03)]">
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-soft-violet tracking-wider">
+                        <Sparkles className="h-3 w-3 animate-pulse" /> AI Circular Match
+                      </div>
+                      <span className="text-[11px] font-semibold text-ink leading-normal">
+                        {item.needs}
+                      </span>
+                      <span className="text-[9px] text-on-surface-variant font-medium">
+                        Completing this exchange powers the community credit loop.
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Card Content Details */}
+                  <div className="p-6 flex flex-col flex-1">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="font-headline-md text-ink text-base sm:text-lg font-bold">
+                        {item.title}
+                      </h3>
+                      <div className="flex items-center text-warn bg-warn/5 px-2 py-0.5 rounded-full">
+                        <span
+                          className="material-symbols-outlined text-[14px]"
+                          style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                          star
+                        </span>
+                        <span className="text-[10px] font-bold ml-1">{item.rating}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs sm:text-sm text-on-surface-variant mb-6 leading-relaxed">
+                      {item.description}
+                    </p>
+                    <div className="flex justify-between items-center pt-4 border-t border-line mt-auto">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn("w-7 h-7 rounded-full bg-gradient-to-br", item.avatarBg)}></div>
+                        <span className="text-[11px] text-on-surface-variant font-semibold">
+                          {item.owner}
+                        </span>
+                      </div>
+                      <div className={cn(
+                        "text-sm font-bold",
+                        item.type === "SKILL" ? "text-deep-forest" : "text-soft-violet"
+                      )}>
+                        {item.rate.split(" ")[0]}{" "}
+                        <span className="text-[10px] uppercase text-on-surface-variant font-normal">
+                          {item.rate.split(" ")[1]}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
-                <div className="p-6 flex flex-col flex-1">
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="font-headline-md text-ink text-lg font-bold">
-                      Python Tutoring
-                    </h3>
-                    <div className="flex items-center text-warn bg-warn/5 px-2 py-0.5 rounded-full">
-                      <span
-                        className="material-symbols-outlined text-[14px]"
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        star
-                      </span>
-                      <span className="text-[10px] font-bold ml-1">4.9</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
-                    Learn basic automation and data analysis in personalized 1-on-1
-                    sessions.
-                  </p>
-                  <div className="flex justify-between items-center pt-4 border-t border-line mt-auto">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-deep-forest to-soft-violet"></div>
-                      <span className="text-[11px] text-on-surface-variant font-semibold">
-                        Aman S.
-                      </span>
-                    </div>
-                    <div className="text-deep-forest text-sm font-bold">
-                      25{" "}
-                      <span className="text-[10px] uppercase text-on-surface-variant font-normal">
-                        Crd/hr
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
-            {/* Skill Card 2 */}
-            <ScrollReveal delay={150} duration={600} className="h-full">
-              <div className="bg-white rounded-[1.5rem] overflow-hidden border border-line/60 hover:shadow-lg transition-all duration-500 group flex flex-col h-full">
-                <div className="h-56 relative overflow-hidden">
-                  <img
-                    alt="Drill"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    src="https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&h=400&q=80"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-ink/20 to-transparent"></div>
-                  <div className="absolute top-4 right-4 px-3 py-1 bg-white/95 backdrop-blur-md rounded-lg text-[10px] font-bold text-soft-violet shadow-sm border border-white">
-                    RESOURCE
-                  </div>
-                </div>
-                <div className="p-6 flex flex-col flex-1">
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="font-headline-md text-ink text-lg font-bold">
-                      Power Drill Kit
-                    </h3>
-                    <div className="flex items-center text-warn bg-warn/5 px-2 py-0.5 rounded-full">
-                      <span
-                        className="material-symbols-outlined text-[14px]"
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        star
-                      </span>
-                      <span className="text-[10px] font-bold ml-1">5.0</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
-                    Heavy-duty hammer drill for weekend home improvement projects.
-                    Multiple bits included.
-                  </p>
-                  <div className="flex justify-between items-center pt-4 border-t border-line mt-auto">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-200 to-soft-violet"></div>
-                      <span className="text-[11px] text-on-surface-variant font-semibold">
-                        Rohit K.
-                      </span>
-                    </div>
-                    <div className="text-soft-violet text-sm font-bold">
-                      10{" "}
-                      <span className="text-[10px] uppercase text-on-surface-variant font-normal">
-                        Crd/day
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
-            {/* Skill Card 3 */}
-            <ScrollReveal delay={300} duration={600} className="h-full">
-              <div className="bg-white rounded-[1.5rem] overflow-hidden border border-line/60 hover:shadow-lg transition-all duration-500 group flex flex-col h-full">
-                <div className="h-56 relative overflow-hidden">
-                  <img
-                    alt="Guitar"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    src="https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=600&h=400&q=80"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-ink/20 to-transparent"></div>
-                  <div className="absolute top-4 right-4 px-3 py-1 bg-white/95 backdrop-blur-md rounded-lg text-[10px] font-bold text-deep-forest shadow-sm border border-white">
-                    SKILL
-                  </div>
-                </div>
-                <div className="p-6 flex flex-col flex-1">
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="font-headline-md text-ink text-lg font-bold">
-                      Guitar Lessons
-                    </h3>
-                    <div className="flex items-center text-warn bg-warn/5 px-2 py-0.5 rounded-full">
-                      <span
-                        className="material-symbols-outlined text-[14px]"
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        star
-                      </span>
-                      <span className="text-[10px] font-bold ml-1">4.8</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
-                    Acoustic guitar for absolute beginners. Focus on basic chords
-                    and rhythm.
-                  </p>
-                  <div className="flex justify-between items-center pt-4 border-t border-line mt-auto">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-soft-violet to-deep-forest"></div>
-                      <span className="text-[11px] text-on-surface-variant font-semibold">
-                        Jignesh P.
-                      </span>
-                    </div>
-                    <div className="text-deep-forest text-sm font-bold">
-                      30{" "}
-                      <span className="text-[10px] uppercase text-on-surface-variant font-normal">
-                        Crd/hr
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
+              </ScrollReveal>
+            ))}
           </div>
         </div>
       </section>
@@ -1103,9 +1507,12 @@ function Landing() {
                             Gardening - Aman S. vs Meera V.
                           </div>
                         </div>
-                        <button className="text-[11px] text-primary-fixed font-bold hover:underline cursor-pointer flex-shrink-0">
+                        <Link
+                          to="/app/coord/disputes"
+                          className="text-[11px] text-primary-fixed font-bold hover:underline cursor-pointer flex-shrink-0"
+                        >
                           Intervene
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </div>

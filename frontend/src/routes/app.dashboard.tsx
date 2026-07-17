@@ -412,6 +412,14 @@ function ResidentDash() {
   const myOpen = complaints.data?.filter((c) => c.status === "open").length ?? 0;
   const myActive = skills.data?.filter((s) => s.providerId === user!.id && s.status === "approved").length ?? 0;
 
+  const approvedSkills = skills.data?.filter((s) => s.status === "approved" && s.providerId !== user!.id) ?? [];
+  const matchedSkills = user!.interests && user!.interests.length > 0
+    ? approvedSkills.filter((s) => user!.interests?.includes(s.category))
+    : [];
+  const recommended = matchedSkills.length > 0
+    ? matchedSkills.slice(0, 3)
+    : approvedSkills.slice(0, 3);
+
   return (
     <div className="space-y-6">
       {/* Stat Grid */}
@@ -421,6 +429,57 @@ function ResidentDash() {
         <Stat icon={AlertCircle} label="Open Issues" value={myOpen} trend={{ value: myOpen === 0 ? "Clean" : `${myOpen} open`, type: myOpen === 0 ? "up" : "down" }} />
         <Stat icon={Calendar} label="Volunteering" value="2" hint="Registered events" />
       </div>
+
+      {/* Recommended for You Widget */}
+      <Card className="border-soft-violet/30 shadow-sm bg-gradient-to-br from-soft-violet/5 via-[#fbfaff] to-transparent">
+        <CardHeader className="pb-3 border-b border-soft-violet/15">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-soft-violet/15 flex items-center justify-center text-soft-violet border border-soft-violet/20">
+                <Sparkles className="h-4 w-4 animate-pulse" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-bold text-ink">Personalized Recommendations (AI)</CardTitle>
+                <CardDescription className="text-[10px] text-on-surface-variant">Tailored service suggestions matching your listed interests.</CardDescription>
+              </div>
+            </div>
+            <Link to="/app/skills">
+              <span className="text-[10px] font-bold text-soft-violet hover:underline cursor-pointer">Browse All</span>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-3">
+          {recommended.length === 0 ? (
+            <div className="py-6 text-center text-xs text-on-surface-variant border border-dashed border-line rounded-xl bg-white">
+              No matching listings found. Try updating your interests in Settings!
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {recommended.map((s) => (
+                <div key={s.id} className="bg-white border border-line/45 hover:border-soft-violet/40 p-3.5 rounded-xl flex flex-col justify-between hover:shadow-sm transition-all group">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <Badge className="bg-soft-violet/10 text-soft-violet hover:bg-soft-violet/15 text-[8px] uppercase tracking-wide border-0 font-bold px-1.5 py-0.5 rounded">
+                        {s.category}
+                      </Badge>
+                      <span className="text-[10px] font-bold text-deep-forest">{s.credits} Crd</span>
+                    </div>
+                    <div className="font-bold text-xs text-ink truncate group-hover:text-soft-violet transition-colors">{s.title}</div>
+                    <p className="text-[10px] text-on-surface-variant line-clamp-2 leading-relaxed">{s.description}</p>
+                  </div>
+                  
+                  <div className="mt-3 pt-2.5 border-t border-line/30 flex justify-between items-center text-[9px]">
+                    <span className="text-on-surface-variant font-medium">Offered by <span className="font-semibold text-ink">{s.providerName.split(" ")[0]}</span></span>
+                    <Link to="/app/skills">
+                      <span className="font-bold text-soft-violet hover:underline cursor-pointer">View</span>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Two Column Layout: Notices and Transactions */}
       <div className="grid gap-6 lg:grid-cols-2">

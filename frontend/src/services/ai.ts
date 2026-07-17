@@ -162,21 +162,72 @@ export async function categorizeComplaint(text: string): Promise<{ category: str
 export async function suggestVolunteers(eventId: string) {
   const ev = __mockState.events.find((e) => e.id === eventId);
   if (!ev) return delay([]);
+
   const residents = __mockState.users.filter(
     (u) => u.societyId === ev.societyId && u.role === "resident" && !ev.volunteers.includes(u.id),
   );
-  return delay(
-    residents.slice(0, 4).map((u, i) => ({
+
+  const scoredResidents = residents.map((u) => {
+    let score = 50;
+    let reasonParts: string[] = [];
+
+    if (u.volunteerInterest === "yes") {
+      score += 30;
+      reasonParts.push("High interest in volunteering");
+    } else if (u.volunteerInterest === "maybe") {
+      score += 15;
+      reasonParts.push("Open to volunteering requests");
+    } else if (u.volunteerInterest === "no") {
+      score -= 20;
+    }
+
+    const textToMatch = `${ev.title} ${ev.description}`.toLowerCase();
+    let interestMatches = 0;
+    if (u.interests && u.interests.length > 0) {
+      u.interests.forEach((interest) => {
+        const cleanInt = interest.toLowerCase();
+        if (cleanInt.includes("garden") && /(garden|clean|yard|cleanup|outdoor|park)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        } else if (cleanInt.includes("tutoring") && /(teach|tutor|class|math|kids|children|education)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        } else if (cleanInt.includes("repair") && /(repair|diy|build|drill|tool|pipe|plumbing)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        } else if (cleanInt.includes("music") && /(music|guitar|art|paint|sing|piano)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        } else if (cleanInt.includes("coordination") && /(coordinator|organize|event|help|cleanup|prep|setup)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        } else if (cleanInt.includes("wellness") && /(yoga|wellness|fitness|health|meditat)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        } else if (cleanInt.includes("cooking") && /(cook|bake|food|potluck|dinner|party|eat)/.test(textToMatch)) {
+          score += 25;
+          interestMatches++;
+        }
+      });
+    }
+
+    if (interestMatches > 0) {
+      reasonParts.push(`Aligns with interests (${interestMatches} match)`);
+    }
+
+    if (reasonParts.length === 0) {
+      reasonParts.push("Active community member");
+    }
+
+    return {
       user: u,
-      score: 90 - i * 12,
-      reason:
-        i === 0
-          ? "Frequently volunteers and lives nearby"
-          : i === 1
-            ? "Has related skills listed"
-            : "Active community participant",
-    })),
-  );
+      score: Math.max(10, Math.min(99, score)),
+      reason: reasonParts.join(" · "),
+    };
+  });
+
+  const sorted = scoredResidents.sort((a, b) => b.score - a.score).slice(0, 4);
+  return delay(sorted);
 }
 
 export type MatchResult = Awaited<ReturnType<typeof matchSkillResource>>[number];

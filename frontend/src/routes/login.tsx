@@ -8,7 +8,16 @@ import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { Sparkles, Building2, ShieldCheck, Milestone, ArrowRight, ChevronRight } from "lucide-react";
 
+type LoginSearch = {
+  redirect?: string;
+};
+
 export const Route = createFileRoute("/login")({
+  validateSearch: (search: Record<string, unknown>): LoginSearch => {
+    return {
+      redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+    };
+  },
   head: () => ({ meta: [{ title: "Login — CEN" }] }),
   component: Login,
 });
@@ -22,6 +31,7 @@ const DEMO = [
 
 function Login() {
   const nav = useNavigate();
+  const { redirect } = Route.useSearch();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("demo");
@@ -31,7 +41,11 @@ function Login() {
     const u = await login(email, pw);
     if (!u) return toast.error("No account found — try a demo email below.");
     toast.success(`Welcome ${u.name}`);
-    nav({ to: "/app/dashboard" });
+    if (redirect) {
+      nav({ to: redirect });
+    } else {
+      nav({ to: "/app/dashboard" });
+    }
   };
 
   const quick = async (em: string) => {
@@ -39,7 +53,11 @@ function Login() {
     const u = await login(em, "demo");
     if (u) {
       toast.success(`Demo Login: connected as ${u.role}`);
-      nav({ to: "/app/dashboard" });
+      if (redirect) {
+        nav({ to: redirect });
+      } else {
+        nav({ to: "/app/dashboard" });
+      }
     }
   };
 

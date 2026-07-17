@@ -9,6 +9,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { resourceService } from "@/services";
 import { autoTag, matchSkillResource, type MatchResult } from "@/services/ai";
 import { useAuth } from "@/lib/auth";
@@ -161,7 +171,7 @@ function Page() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filtered.map((r) => (
-                <ResCard key={r.id} r={r} />
+                <ResourceCard key={r.id} r={r} />
               ))}
             </div>
           )}
@@ -215,9 +225,10 @@ function Page() {
   );
 }
 
-function ResCard({ r }: { r: import("@/mocks/data").Resource }) {
+function ResourceCard({ r }: { r: import("@/mocks/data").Resource }) {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const getInitials = (name: string) => {
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -227,60 +238,88 @@ function ResCard({ r }: { r: import("@/mocks/data").Resource }) {
   const insCredits = user!.creditBalance < r.credits;
 
   return (
-    <Card className="border-line/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden bg-white">
-      <CardContent className="p-5 flex flex-col justify-between flex-1 space-y-4">
-        <div className="space-y-2">
-          {/* Card Category pill and Credit cost */}
-          <div className="flex justify-between items-center">
-            <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide", CAT_COLORS[r.category] || "bg-slate-50")}>
-              {r.category}
-            </span>
-            <div className="inline-flex items-center gap-1 bg-deep-forest/5 text-deep-forest border border-deep-forest/15 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
-              {r.credits} Credits
+    <>
+      <Card className="border-line/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden bg-white">
+        <CardContent className="p-5 flex flex-col justify-between flex-1 space-y-4">
+          <div className="space-y-2">
+            {/* Card Category pill and Credit cost */}
+            <div className="flex justify-between items-center">
+              <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide", CAT_COLORS[r.category] || "bg-slate-50")}>
+                {r.category}
+              </span>
+              <div className="inline-flex items-center gap-1 bg-deep-forest/5 text-deep-forest border border-deep-forest/15 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                {r.credits} Credits
+              </div>
             </div>
-          </div>
 
-          <h3 className="font-bold text-sm text-ink leading-snug line-clamp-1">{r.name}</h3>
-          
-          <div className="flex items-center gap-2 pt-1">
-            <div className="w-6 h-6 rounded-full bg-deep-forest/5 text-deep-forest border border-deep-forest/15 flex items-center justify-center text-[9px] font-bold">
-              {getInitials(r.ownerName)}
+            <h3 className="font-bold text-sm text-ink leading-snug line-clamp-1">{r.name}</h3>
+            
+            <div className="flex items-center gap-2 pt-1">
+              <div className="w-6 h-6 rounded-full bg-deep-forest/5 text-deep-forest border border-deep-forest/15 flex items-center justify-center text-[9px] font-bold">
+                {getInitials(r.ownerName)}
+              </div>
+              <span className="text-[10px] text-on-surface-variant font-medium">Lent by <span className="font-bold text-ink">{r.ownerName}</span></span>
             </div>
-            <span className="text-[10px] text-on-surface-variant font-medium">Lent by <span className="font-bold text-ink">{r.ownerName}</span></span>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 pt-1">{r.description}</p>
           </div>
 
-          <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 pt-1">{r.description}</p>
-        </div>
+          <div className="space-y-3.5">
+            {/* Availability badge */}
+            <div>
+              {r.available ? (
+                <Badge className="bg-emerald-50 border-emerald-100 text-emerald-800 text-[9px] font-bold uppercase tracking-wider">
+                  Available to Borrow
+                </Badge>
+              ) : (
+                <Badge className="bg-amber-50 border-amber-100 text-amber-800 text-[9px] font-bold uppercase tracking-wider">
+                  Currently Borrowed
+                </Badge>
+              )}
+            </div>
 
-        <div className="space-y-3.5">
-          {/* Availability badge */}
-          <div>
-            {r.available ? (
-              <Badge className="bg-emerald-50 border-emerald-100 text-emerald-800 text-[9px] font-bold uppercase tracking-wider">
-                Available to Borrow
-              </Badge>
-            ) : (
-              <Badge className="bg-amber-50 border-amber-100 text-amber-800 text-[9px] font-bold uppercase tracking-wider">
-                Currently Borrowed
-              </Badge>
-            )}
+            {/* Book button */}
+            <Button
+              disabled={!r.available || isOwner || insCredits}
+              onClick={() => setShowConfirm(true)}
+              className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
+            >
+              {isOwner ? "My Item" : !r.available ? "Out of Stock" : insCredits ? `Insufficient Credits (${r.credits} Crd needed)` : "Request to Borrow"}
+            </Button>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Book button */}
-          <Button
-            disabled={!r.available || isOwner || insCredits}
-            onClick={async () => {
-              await resourceService.borrow(r.id, user!.id);
-              qc.invalidateQueries();
-              toast.success(`Request sent: Borrowed ${r.name}`);
-            }}
-            className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
-          >
-            {isOwner ? "My Item" : !r.available ? "Out of Stock" : insCredits ? `Insufficient Credits (${r.credits} Crd needed)` : "Request to Borrow"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+              <Package className="h-5 w-5 text-deep-forest flex-shrink-0" />
+              Request to Borrow
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
+              Are you sure you want to borrow <span className="font-bold text-ink">"{r.name}"</span> from <span className="font-semibold text-ink">{r.ownerName}</span>? This will spend <span className="font-bold text-deep-forest">{r.credits} Credits</span> from your balance.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 flex gap-2">
+            <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={async () => {
+                await resourceService.borrow(r.id, user!.id);
+                qc.invalidateQueries();
+                toast.success(`Request sent: Borrowed ${r.name}`);
+                setShowConfirm(false);
+              }}
+              className="h-9 px-4 text-xs font-semibold rounded-lg bg-deep-forest hover:bg-deep-forest/90 text-white cursor-pointer active:scale-98 transition-all"
+            >
+              Confirm Request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -288,7 +327,7 @@ function NewResDialog() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", category: "General", credits: 2 });
+  const [form, setForm] = useState<{ name: string; description: string; category: string; credits: number | string }>({ name: "", description: "", category: "General", credits: 2 });
   const [autotagging, setAutotagging] = useState(false);
 
   const suggest = async () => {
@@ -368,7 +407,7 @@ function NewResDialog() {
               <Input 
                 type="number" 
                 value={form.credits} 
-                onChange={(e) => setForm({ ...form, credits: +e.target.value })} 
+                onChange={(e) => setForm({ ...form, credits: e.target.value === "" ? "" : Number(e.target.value) })} 
                 className="h-9 text-xs rounded-lg border-line-strong/60"
               />
             </div>
@@ -377,7 +416,7 @@ function NewResDialog() {
           <Button 
             onClick={async () => {
               await resourceService.create({
-                ...form, available: true, ownerId: user!.id, ownerName: user!.name, societyId: user!.societyId!,
+                ...form, credits: Number(form.credits) || 0, available: true, ownerId: user!.id, ownerName: user!.name, societyId: user!.societyId!,
               });
               setOpen(false); 
               qc.invalidateQueries();

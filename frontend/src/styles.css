@@ -167,8 +167,29 @@
     border-color: var(--color-border);
   }
 
-  html {
+  html, 
+  main, 
+  .overflow-y-auto {
     scrollbar-gutter: stable;
+  }
+
+  /* Custom minimal floating scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 99px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.18);
   }
 
   body {
@@ -237,6 +258,23 @@
 
 .animate-page-fade {
   animation: page-fade-in 0.42s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes card-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateX(18px) scale(0.975);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.animate-card-slide {
+  animation: card-slide-in 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 

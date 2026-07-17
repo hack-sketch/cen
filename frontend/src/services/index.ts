@@ -70,26 +70,37 @@ export const societyService = {
     return delay(app);
   },
   listApplications: async () => delay(state.applications),
-  approveApplication: async (id: string, capacity: number, hhStart: number, hhEnd: number) => {
+  approveApplication: async (id: string, capacity: number) => {
     const a = state.applications.find((x) => x.id === id);
     if (a) {
       a.status = "approved";
+      
+      const socId = uid("soc");
+      const applicantUser = state.users.find((u) => u.email.toLowerCase() === a.applicantContact.toLowerCase());
+      const adminId = applicantUser ? applicantUser.id : uid("u");
+
+      if (applicantUser) {
+        applicantUser.role = "admin";
+        applicantUser.societyId = socId;
+      }
+
       const newSoc: mock.Society = {
-        id: uid("soc"),
+        id: socId,
         name: a.societyName,
         type: a.type,
         address: a.address,
         latitude: 12.97,
         longitude: 77.59,
-        adminId: uid("u"),
-        capacity,
-        householdRangeStart: hhStart,
-        householdRangeEnd: hhEnd,
+        adminId: adminId,
+        capacity: capacity,
+        householdRangeStart: 1,
+        householdRangeEnd: capacity,
         coordinatorCount: 0,
         status: "active",
-        performanceScore: 50,
-        key: `${a.societyName.slice(0, 4).toUpperCase()}-${Math.floor(Math.random() * 99)}`,
+        performanceScore: 100,
+        key: a.societyName.toUpperCase().slice(0, 4) + "-" + uid("k").toUpperCase().slice(0, 4),
       };
+
       state.societies.push(newSoc);
     }
     return delay(true);
@@ -104,6 +115,9 @@ export const societyService = {
     if (s) s.status = "suspended";
     return delay(true);
   },
+  getApplicationByEmail: async (email: string) => {
+    return delay(state.applications.find((a) => a.applicantContact.toLowerCase() === email.toLowerCase()) ?? null);
+  },
 };
 
 // ---------------- Households ----------------
@@ -112,10 +126,18 @@ export const householdService = {
   listBySociety: async (societyId: string) =>
     delay(state.households.filter((h) => h.societyId === societyId)),
   register: async (societyId: string, unitNumber: string) => {
+    const trimmed = unitNumber.trim();
+    const duplicate = state.households.some(
+      (h) => h.societyId === societyId && h.unitNumber.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      throw new Error(`Household unit "${trimmed}" already exists in this society.`);
+    }
+
     const h: mock.Household = {
       id: uid("h"),
       societyId,
-      unitNumber,
+      unitNumber: trimmed,
       claimed: false,
     };
     state.households.push(h);
@@ -127,6 +149,71 @@ export const householdService = {
       h.claimed = true;
       h.claimedByUserId = userId;
     }
+    return delay(true);
+  },
+  bulkGenerate: async (societyId: string, blocks: string[], start: number, end: number, format: string) => {
+    const list: mock.Household[] = [];
+    const blockList = blocks.length > 0 ? blocks : [""];
+    
+    blockList.forEach((b) => {
+      for (let i = start; i <= end; i++) {
+        let name = format;
+        if (b) {
+          name = name.replace("{Block}", b);
+        } else {
+          name = name.replace("{Block}-", "").replace("{Block}", "");
+        }
+        name = name.replace("{Unit}", String(i));
+        
+        const isDuplicate = 
+          state.households.some((h) => h.societyId === societyId && h.unitNumber.toLowerCase() === name.toLowerCase()) ||
+          list.some((h) => h.unitNumber.toLowerCase() === name.toLowerCase());
+
+        if (!isDuplicate) {
+          list.push({
+            id: uid("h"),
+            societyId,
+            unitNumber: name,
+            claimed: false,
+          });
+        }
+      }
+    });
+
+    state.households.push(...list);
+    return delay(list);
+  },
+  updateUnitNumber: async (id: string, unitNumber: string) => {
+    const h = state.households.find((x) => x.id === id);
+    if (h) {
+      h.unitNumber = unitNumber;
+    }
+    return delay(h ?? null);
+  },
+  deleteHousehold: async (id: string) => {
+    const idx = state.households.findIndex((x) => x.id === id);
+    if (idx !== -1) {
+      const h = state.households[idx];
+      if (h.claimed && h.claimedByUserId) {
+        const u = state.users.find((x) => x.id === h.claimedByUserId);
+        if (u) {
+          u.householdId = undefined;
+        }
+      }
+      state.households.splice(idx, 1);
+    }
+    return delay(true);
+  },
+  deleteAll: async (societyId: string) => {
+    state.households.forEach((h) => {
+      if (h.societyId === societyId && h.claimed && h.claimedByUserId) {
+        const u = state.users.find((x) => x.id === h.claimedByUserId);
+        if (u) {
+          u.householdId = undefined;
+        }
+      }
+    });
+    state.households = state.households.filter((h) => h.societyId !== societyId);
     return delay(true);
   },
 };
@@ -148,12 +235,32 @@ export const joinRequestService = {
     delay(state.joinRequests.filter((r) => r.societyId === societyId)),
   approve: async (id: string) => {
     const r = state.joinRequests.find((x) => x.id === id);
-    if (r) r.status = "approved";
+    if (r) {
+      r.status = "approved";
+      const u = state.users.find((x) => x.id === r.userId);
+      if (u) {
+        u.societyId = r.societyId;
+        u.householdId = r.householdId;
+      }
+      const h = state.households.find((x) => x.id === r.householdId);
+      if (h) {
+        h.claimed = true;
+        h.residentId = r.userId;
+        h.residentName = r.userName;
+      }
+    }
     return delay(true);
   },
   reject: async (id: string) => {
     const r = state.joinRequests.find((x) => x.id === id);
     if (r) r.status = "rejected";
+    return delay(true);
+  },
+  getByUserId: async (userId: string) => {
+    return delay(state.joinRequests.find((r) => r.userId === userId) ?? null);
+  },
+  deleteRequest: async (id: string) => {
+    state.joinRequests = state.joinRequests.filter((x) => x.id !== id);
     return delay(true);
   },
 };
@@ -190,6 +297,19 @@ export const userService = {
         const s = state.societies.find((x) => x.id === u.societyId);
         if (s) s.name = data.societyName;
       }
+    }
+    return delay(u ?? null);
+  },
+  updateOnboardingSurvey: async (
+    userId: string,
+    survey: { interests: string[]; offeredSkillsText: string; volunteerInterest: string },
+  ) => {
+    const u = state.users.find((x) => x.id === userId);
+    if (u) {
+      u.interests = survey.interests;
+      u.offeredSkillsText = survey.offeredSkillsText;
+      u.volunteerInterest = survey.volunteerInterest;
+      u.hasCompletedSurvey = true;
     }
     return delay(u ?? null);
   },
@@ -367,6 +487,18 @@ export const eventService = {
   rejectVolunteer: async (id: string) => {
     const v = state.volunteerRequests.find((x) => x.id === id);
     if (v) v.status = "rejected";
+    return delay(true);
+  },
+  leave: async (eventId: string, residentId: string, reason: string) => {
+    const ev = state.events.find((e) => e.id === eventId);
+    if (ev) {
+      ev.volunteers = ev.volunteers.filter((uid) => uid !== residentId);
+    }
+    const v = state.volunteerRequests.find((x) => x.eventId === eventId && x.residentId === residentId);
+    if (v) {
+      v.status = "left";
+      v.leaveReason = reason;
+    }
     return delay(true);
   },
 };

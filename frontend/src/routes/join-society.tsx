@@ -1,16 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { findNearbySocieties, type NearbyResult } from "@/services/ai";
 import { societyService, householdService, joinRequestService } from "@/services";
+import { useAuth } from "@/lib/auth";
+import { OnboardingSurveyModal } from "@/routes/app";
 import type { Household, Society } from "@/mocks/data";
 import { toast } from "sonner";
-import { MapPin, Sparkles, CheckCircle2, Upload } from "lucide-react";
+import { MapPin, Sparkles, CheckCircle2, Upload, Lock } from "lucide-react";
 
 export const Route = createFileRoute("/join-society")({
   head: () => ({ meta: [{ title: "Join a society — CEN" }] }),
@@ -18,8 +20,61 @@ export const Route = createFileRoute("/join-society")({
 });
 
 function JoinSociety() {
+  const { user, loading } = useAuth();
   const [selectedSociety, setSelectedSociety] = useState<Society | null>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [showSurvey, setShowSurvey] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setShowSurvey(!user.hasCompletedSurvey);
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-panel/10">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-deep-forest/20 border-t-deep-forest rounded-full animate-spin"></div>
+          <span className="text-xs font-bold text-ink/65 uppercase tracking-wider">Verifying Session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-panel/20 p-4 font-body">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center">
+            <Link to="/" className="inline-flex items-center gap-2">
+              <div className="h-8 w-8 rounded-xl bg-deep-forest flex items-center justify-center font-bold text-white text-sm">C</div>
+              <span className="font-bold text-ink uppercase tracking-widest text-xs">CEN Network</span>
+            </Link>
+          </div>
+          <Card className="border-line/60 shadow-xl bg-white p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-soft-violet/10 flex items-center justify-center mx-auto text-soft-violet">
+              <Lock className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle className="text-lg font-bold text-ink">Account Required</CardTitle>
+              <CardDescription className="text-xs text-on-surface-variant leading-relaxed">
+                You must sign in or create an account first to request to join a society. This links your onboarding request securely to your resident profile.
+              </CardDescription>
+            </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <Link to="/signup" search={{ redirect: "/join-society" }}><Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10">Sign Up (Create Account)</Button></Link>
+              <Link to="/login" search={{ redirect: "/join-society" }}><Button variant="outline" className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold">Sign In (Login)</Button></Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (showSurvey) {
+    return <OnboardingSurveyModal user={user} onComplete={() => setShowSurvey(false)} buttonText="Continue" />;
+  }
 
   if (selectedSociety) {
     return <JoinFlow society={selectedSociety} step={step} setStep={setStep} onBack={() => { setSelectedSociety(null); setStep(1); }} />;
@@ -122,10 +177,22 @@ function JoinFlow({ society, step, setStep, onBack }: {
   society: Society; step: 1 | 2 | 3 | 4;
   setStep: (s: 1 | 2 | 3 | 4) => void; onBack: () => void;
 }) {
+  const { user } = useAuth();
   const [households, setHouseholds] = useState<Household[]>([]);
   const [chosen, setChosen] = useState<Household | null>(null);
-  const [form, setForm] = useState({ name: "", contact: "" });
+  const [form, setForm] = useState({ name: user?.name || "", contact: user?.email || "" });
   const [file, setFile] = useState<string>("");
+
+  // Responsive pagination state
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+  const [joinPage, setJoinPage] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => setIsSmallScreen(window.innerWidth < 640);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const loadHouseholds = async () => {
     // TODO: replace with real API call to backend
@@ -134,6 +201,12 @@ function JoinFlow({ society, step, setStep, onBack }: {
   };
 
   if (step === 1 && households.length === 0) loadHouseholds();
+
+  const threshold = isSmallScreen ? 30 : 50;
+  const showPagination = households.length > threshold;
+  const displayHouseholds = showPagination 
+    ? households.slice((joinPage - 1) * threshold, joinPage * threshold)
+    : households;
 
   return (
     <div className="mx-auto max-w-2xl p-4 py-10">
@@ -150,7 +223,7 @@ function JoinFlow({ society, step, setStep, onBack }: {
             <>
               <Label>Claim your household</Label>
               <div className="mt-2 grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
-                {households.map((h) => (
+                {displayHouseholds.map((h) => (
                   <button
                     key={h.id}
                     disabled={h.claimed}
@@ -168,6 +241,33 @@ function JoinFlow({ society, step, setStep, onBack }: {
                   </button>
                 ))}
               </div>
+
+              {showPagination && (
+                <div className="flex justify-between items-center mt-4 pt-3 border-t border-line/45">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={joinPage === 1}
+                    onClick={() => setJoinPage(joinPage - 1)}
+                    className="text-xs font-semibold px-3 h-8 cursor-pointer border-line-strong hover:bg-panel"
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-on-surface-variant font-medium">
+                    Page {joinPage} of {Math.ceil(households.length / threshold)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={joinPage === Math.ceil(households.length / threshold)}
+                    onClick={() => setJoinPage(joinPage + 1)}
+                    className="text-xs font-semibold px-3 h-8 cursor-pointer border-line-strong hover:bg-panel"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+
               <Button className="mt-4 w-full" disabled={!chosen} onClick={() => setStep(2)}>Continue</Button>
             </>
           )}
@@ -190,7 +290,7 @@ function JoinFlow({ society, step, setStep, onBack }: {
               <Button className="w-full" disabled={!file} onClick={async () => {
                 // TODO: replace with real API call to backend
                 await joinRequestService.submit({
-                  userId: "u-anon",
+                  userId: user!.id,
                   userName: form.name,
                   societyId: society.id,
                   householdId: chosen!.id,
@@ -203,12 +303,12 @@ function JoinFlow({ society, step, setStep, onBack }: {
           )}
           {step === 4 && (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <CheckCircle2 className="h-14 w-14 text-primary" />
-              <div className="text-lg font-semibold">Request sent</div>
-              <p className="text-sm text-muted-foreground">
-                Your request has been sent to your society admin for approval.
+              <CheckCircle2 className="h-14 w-14 text-emerald-600" />
+              <div className="text-lg font-bold text-ink">Request Submitted Successfully</div>
+              <p className="text-sm text-on-surface-variant leading-relaxed">
+                Your request has been sent to your society coordinator for approval. You can now enter the console dashboard to view your status.
               </p>
-              <Link to="/login"><Button>Go to login</Button></Link>
+              <Link to="/app/dashboard"><Button className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 px-6 rounded-lg active:scale-98 transition-all">Go to Dashboard</Button></Link>
             </div>
           )}
         </CardContent>

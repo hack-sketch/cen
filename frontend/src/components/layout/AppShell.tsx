@@ -3,6 +3,16 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   LayoutDashboard,
   Users,
   Building2,
@@ -80,6 +90,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   if (!user) return null;
 
@@ -169,7 +180,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => { logout(); navigate({ to: "/login" }); }}
+              onClick={() => setShowLogoutConfirm(true)}
               className="hover:bg-rose-50 hover:text-rose-600 transition-all rounded-lg cursor-pointer h-9 w-9 text-on-surface-variant"
               title="Logout"
             >
@@ -254,6 +265,34 @@ export function AppShell({ children }: { children?: ReactNode }) {
           </div>
         </main>
       </div>
+
+      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+              <LogOut className="h-5 w-5 text-rose-600 flex-shrink-0" />
+              Confirm Log Out
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
+              Are you sure you want to log out? You will be disconnected from your current session.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 flex gap-2">
+            <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                logout();
+                navigate({ to: "/login" });
+              }}
+              className="h-9 px-4 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-98 transition-all"
+            >
+              Log Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

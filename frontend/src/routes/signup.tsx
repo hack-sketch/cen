@@ -5,24 +5,45 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { authService } from "@/services";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, ShieldCheck } from "lucide-react";
 
+type SignupSearch = {
+  redirect?: string;
+};
+
 export const Route = createFileRoute("/signup")({
+  validateSearch: (search: Record<string, unknown>): SignupSearch => {
+    return {
+      redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+    };
+  },
   head: () => ({ meta: [{ title: "Sign up — CEN" }] }),
   component: Signup,
 });
 
 function Signup() {
   const nav = useNavigate();
+  const { redirect } = Route.useSearch();
+  const { setUserById } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.password !== form.confirm) return toast.error("Passwords do not match");
-    await authService.signup(form.name, form.email);
-    toast.success("Account created — now join or request a society");
-    nav({ to: "/join-society" });
+    const u = await authService.signup(form.name, form.email);
+    if (u) {
+      await setUserById(u.id);
+      toast.success("Account created — now claim your household or request a society");
+      if (redirect) {
+        nav({ to: redirect });
+      } else {
+        nav({ to: "/app/dashboard" });
+      }
+    } else {
+      toast.error("Signup failed");
+    }
   };
 
   return (

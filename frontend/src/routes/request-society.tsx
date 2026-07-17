@@ -1,14 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { societyService } from "@/services";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { CheckCircle2 } from "lucide-react";
+import { OnboardingSurveyModal } from "@/routes/app";
+import { CheckCircle2, Lock, Building } from "lucide-react";
 
 export const Route = createFileRoute("/request-society")({
   head: () => ({ meta: [{ title: "Request a new society — CEN" }] }),
@@ -17,7 +19,9 @@ export const Route = createFileRoute("/request-society")({
 
 function RequestSociety() {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
   const [submitted, setSubmitted] = useState(false);
+  const [showSurvey, setShowSurvey] = useState(false);
   const [form, setForm] = useState({
     societyName: "",
     type: "Residential Apartment",
@@ -25,29 +29,93 @@ function RequestSociety() {
     applicantName: "",
     applicantContact: "",
     reason: "",
+    residentCount: 100,
   });
+
+  useEffect(() => {
+    if (user) {
+      setForm((f) => ({
+        ...f,
+        applicantName: user.name,
+        applicantContact: user.email,
+      }));
+      setShowSurvey(!user.hasCompletedSurvey);
+    }
+  }, [user]);
+
   const upd = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: replace with real API call to backend
-    await societyService.submitApplication(form);
+    const finalForm = {
+      ...form,
+      residentCount: Number(form.residentCount) || 100,
+    };
+    await societyService.submitApplication(finalForm);
     toast.success("Application submitted for owner review");
     setSubmitted(true);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-panel/10">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-deep-forest/20 border-t-deep-forest rounded-full animate-spin"></div>
+          <span className="text-xs font-bold text-ink/65 uppercase tracking-wider">Verifying Session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-panel/20 p-4 font-body">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center">
+            <Link to="/" className="inline-flex items-center gap-2">
+              <div className="h-8 w-8 rounded-xl bg-deep-forest flex items-center justify-center font-bold text-white text-sm">C</div>
+              <span className="font-bold text-ink uppercase tracking-widest text-xs">CEN Network</span>
+            </Link>
+          </div>
+          <Card className="border-line/60 shadow-xl bg-white p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-soft-violet/10 flex items-center justify-center mx-auto text-soft-violet">
+              <Lock className="h-6 w-6" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle className="text-lg font-bold text-ink">Account Required</CardTitle>
+              <CardDescription className="text-xs text-on-surface-variant leading-relaxed">
+                You must sign in or create an account first to request to setup a society network. This links your proposal securely to your profile.
+              </CardDescription>
+            </div>
+            <div className="flex flex-col gap-2 pt-2">
+              <Link to="/signup" search={{ redirect: "/request-society" }}><Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10">Sign Up (Create Account)</Button></Link>
+              <Link to="/login" search={{ redirect: "/request-society" }}><Button variant="outline" className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold">Sign In (Login)</Button></Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (showSurvey) {
+    return <OnboardingSurveyModal user={user} onComplete={() => setShowSurvey(false)} buttonText="Continue" />;
+  }
 
   if (submitted) {
     return (
       <div className="mx-auto grid min-h-screen max-w-lg place-items-center p-6">
         <Card className="w-full">
           <CardContent className="flex flex-col items-center gap-3 pt-10 text-center">
-            <CheckCircle2 className="h-14 w-14 text-primary" />
-            <h1 className="text-xl font-semibold">Application submitted</h1>
-            <p className="text-sm text-muted-foreground">
-              Your application has been submitted and is pending owner approval. You'll be notified once reviewed.
+            <CheckCircle2 className="h-14 w-14 text-emerald-600" />
+            <h1 className="text-xl font-bold text-ink">Application Submitted</h1>
+            <p className="text-sm text-on-surface-variant leading-relaxed">
+              Your application has been submitted and is pending review by platform management. You will be redirected to the console dashboard to view your status.
             </p>
-            <Button onClick={() => navigate({ to: "/" })}>Back to home</Button>
+            <div className="flex gap-2.5 pt-2">
+              <Button onClick={() => navigate({ to: "/app/dashboard" })} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 px-5 rounded-lg active:scale-98 transition-all">Go to Dashboard</Button>
+              <Button variant="outline" onClick={() => navigate({ to: "/" })} className="h-10 border-line-strong hover:bg-panel text-xs font-semibold px-5 rounded-lg active:scale-98 transition-all">Back to Home</Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -96,6 +164,10 @@ function RequestSociety() {
                 <Label htmlFor="ac">Email or phone</Label>
                 <Input id="ac" required value={form.applicantContact} onChange={(e) => upd("applicantContact", e.target.value)} />
               </div>
+            </div>
+            <div>
+              <Label htmlFor="rc">Estimated Number of Residents</Label>
+              <Input id="rc" type="number" required min={1} value={form.residentCount} onChange={(e) => upd("residentCount", e.target.value === "" ? "" as any : Number(e.target.value))} />
             </div>
             <div>
               <Label htmlFor="rs">Why do you want CEN?</Label>

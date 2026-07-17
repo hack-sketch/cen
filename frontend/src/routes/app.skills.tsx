@@ -9,6 +9,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { skillService } from "@/services";
 import { autoTag, matchSkillResource, type MatchResult } from "@/services/ai";
@@ -239,6 +249,7 @@ function Page() {
 function SkillCard({ s }: { s: import("@/mocks/data").Skill }) {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const getInitials = (name: string) => {
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -248,56 +259,84 @@ function SkillCard({ s }: { s: import("@/mocks/data").Skill }) {
   const insCredits = (user!.creditBalance ?? 0) < s.credits;
 
   return (
-    <Card className="border-line/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden bg-white">
-      <CardContent className="p-5 flex flex-col justify-between flex-1 space-y-4">
-        <div className="space-y-2">
-          {/* Card Category pill and Credit cost */}
-          <div className="flex justify-between items-center">
-            <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide", CAT_COLORS[s.category] || "bg-slate-50")}>
-              {s.category}
-            </span>
-            <div className="inline-flex items-center gap-1 bg-deep-forest/5 text-deep-forest border border-deep-forest/15 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
-              {s.credits} Credits
+    <>
+      <Card className="border-line/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden bg-white">
+        <CardContent className="p-5 flex flex-col justify-between flex-1 space-y-4">
+          <div className="space-y-2">
+            {/* Card Category pill and Credit cost */}
+            <div className="flex justify-between items-center">
+              <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide", CAT_COLORS[s.category] || "bg-slate-50")}>
+                {s.category}
+              </span>
+              <div className="inline-flex items-center gap-1 bg-deep-forest/5 text-deep-forest border border-deep-forest/15 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                {s.credits} Credits
+              </div>
             </div>
-          </div>
 
-          <h3 className="font-bold text-sm text-ink leading-snug line-clamp-1">{s.title}</h3>
-          
-          <div className="flex items-center gap-2 pt-1">
-            <div className="w-6 h-6 rounded-full bg-deep-forest/5 text-deep-forest border border-deep-forest/15 flex items-center justify-center text-[9px] font-bold">
-              {getInitials(s.providerName)}
+            <h3 className="font-bold text-sm text-ink leading-snug line-clamp-1">{s.title}</h3>
+            
+            <div className="flex items-center gap-2 pt-1">
+              <div className="w-6 h-6 rounded-full bg-deep-forest/5 text-deep-forest border border-deep-forest/15 flex items-center justify-center text-[9px] font-bold">
+                {getInitials(s.providerName)}
+              </div>
+              <span className="text-[10px] text-on-surface-variant font-medium">Offered by <span className="font-bold text-ink">{s.providerName}</span></span>
             </div>
-            <span className="text-[10px] text-on-surface-variant font-medium">Offered by <span className="font-bold text-ink">{s.providerName}</span></span>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 pt-1">{s.description}</p>
           </div>
 
-          <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 pt-1">{s.description}</p>
-        </div>
+          <div className="space-y-3.5">
+            {/* Tags list */}
+            <div className="flex flex-wrap gap-1">
+              {s.tags.map((t) => (
+                <Badge key={t} variant="outline" className="text-[9px] border-line font-medium text-on-surface-variant bg-panel/30">
+                  #{t}
+                </Badge>
+              ))}
+            </div>
 
-        <div className="space-y-3.5">
-          {/* Tags list */}
-          <div className="flex flex-wrap gap-1">
-            {s.tags.map((t) => (
-              <Badge key={t} variant="outline" className="text-[9px] border-line font-medium text-on-surface-variant bg-panel/30">
-                #{t}
-              </Badge>
-            ))}
+            {/* Book button */}
+            <Button
+              disabled={isOwner || insCredits}
+              onClick={() => setShowConfirm(true)}
+              className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
+            >
+              {isOwner ? "My Offered Skill" : insCredits ? `Insufficient Credits (${s.credits} Crd needed)` : `Book (${s.credits} Credits)`}
+            </Button>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Book button */}
-          <Button
-            disabled={isOwner || insCredits}
-            onClick={async () => {
-              await skillService.book(s.id, user!.id);
-              qc.invalidateQueries();
-              toast.success(`Booked ${s.title} (-${s.credits} credits)`);
-            }}
-            className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
-          >
-            {isOwner ? "My Offered Skill" : insCredits ? `Insufficient Credits (${s.credits} Crd needed)` : `Book (${s.credits} Credits)`}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-deep-forest flex-shrink-0" />
+              Confirm Booking
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
+              Are you sure you want to spend <span className="font-bold text-deep-forest">{s.credits} Credits</span> to book <span className="font-bold text-ink">"{s.title}"</span> from <span className="font-semibold text-ink">{s.providerName}</span>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 flex gap-2">
+            <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={async () => {
+                await skillService.book(s.id, user!.id);
+                qc.invalidateQueries();
+                toast.success(`Booked ${s.title} (-${s.credits} credits)`);
+                setShowConfirm(false);
+              }}
+              className="h-9 px-4 text-xs font-semibold rounded-lg bg-deep-forest hover:bg-deep-forest/90 text-white cursor-pointer active:scale-98 transition-all"
+            >
+              Confirm Booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -305,7 +344,7 @@ function NewSkillDialog() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", category: "General", credits: 3, tags: "" });
+  const [form, setForm] = useState<{ title: string; description: string; category: string; credits: number | string; tags: string }>({ title: "", description: "", category: "General", credits: 3, tags: "" });
   const [autotagging, setAutotagging] = useState(false);
 
   const suggest = async () => {
@@ -387,7 +426,7 @@ function NewSkillDialog() {
               <Input 
                 type="number" 
                 value={form.credits} 
-                onChange={(e) => setForm({ ...form, credits: +e.target.value })} 
+                onChange={(e) => setForm({ ...form, credits: e.target.value === "" ? "" : Number(e.target.value) })} 
                 className="h-9 text-xs rounded-lg border-line-strong/60"
               />
             </div>
@@ -407,7 +446,7 @@ function NewSkillDialog() {
             onClick={async () => {
               await skillService.create({
                 title: form.title, description: form.description, category: form.category,
-                credits: form.credits, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+                credits: Number(form.credits) || 0, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
                 providerId: user!.id, providerName: user!.name, societyId: user!.societyId!,
               });
               setOpen(false); 

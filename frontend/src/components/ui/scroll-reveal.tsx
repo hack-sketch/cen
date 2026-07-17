@@ -47,13 +47,13 @@ export function ScrollReveal({
   const getDirectionClass = () => {
     switch (direction) {
       case "up":
-        return "translate-y-8";
+        return "translate-y-3";
       case "down":
-        return "-translate-y-8";
+        return "-translate-y-3";
       case "left":
-        return "translate-x-8";
+        return "translate-x-3";
       case "right":
-        return "-translate-x-8";
+        return "-translate-x-3";
       case "none":
       default:
         return "";
@@ -69,8 +69,8 @@ export function ScrollReveal({
       }}
       className={`transition-all ease-out transform ${
         isVisible
-          ? "opacity-100 translate-y-0 translate-x-0 scale-100"
-          : `opacity-0 ${getDirectionClass()} scale-[0.98]`
+          ? "opacity-100 translate-y-0 translate-x-0"
+          : `opacity-0 ${getDirectionClass()}`
       } ${className}`}
     >
       {children}

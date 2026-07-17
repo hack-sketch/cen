@@ -19,6 +19,10 @@ export interface User {
   idProofUploaded: boolean;
   isCoordinator: boolean;
   avatarColor?: string;
+  interests?: string[];
+  offeredSkillsText?: string;
+  volunteerInterest?: string;
+  hasCompletedSurvey?: boolean;
 }
 
 export interface Society {
@@ -56,6 +60,7 @@ export interface SocietyApplication {
   reason: string;
   status: "pending" | "approved" | "rejected";
   submittedAt: string;
+  residentCount?: number;
 }
 
 export interface JoinRequest {
@@ -124,7 +129,8 @@ export interface VolunteerRequest {
   residentId: string;
   residentName: string;
   type: "self-requested" | "coordinator-invited";
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "left";
+  leaveReason?: string;
 }
 
 export interface Complaint {
@@ -170,6 +176,22 @@ export interface ChatMessage {
 // ---------------------------------------------------------------------------
 
 export const societies: Society[] = [
+  {
+    id: "soc-fresh",
+    name: "Fresh Vista Community",
+    type: "Residential Apartment",
+    address: "77 Orchid Boulevard, Bengaluru",
+    latitude: 12.96,
+    longitude: 77.58,
+    adminId: "u-freshadmin",
+    capacity: 150,
+    householdRangeStart: 1,
+    householdRangeEnd: 150,
+    coordinatorCount: 0,
+    status: "active",
+    performanceScore: 100,
+    key: "FRESH-VISTA",
+  },
   {
     id: "soc-1",
     name: "Green Meadows Residency",
@@ -222,6 +244,19 @@ export const societies: Society[] = [
 
 export const users: User[] = [
   {
+    id: "u-freshadmin",
+    name: "Fresh Admin",
+    email: "freshadmin@cen.app",
+    role: "admin",
+    societyId: "soc-fresh",
+    creditBalance: 100,
+    joinedDate: "2026-07-18",
+    idProofUploaded: true,
+    isCoordinator: false,
+    avatarColor: "#ec4899",
+    hasCompletedSurvey: true,
+  },
+  {
     id: "u-owner",
     name: "Priya Owner",
     email: "owner@cen.app",
@@ -231,6 +266,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: false,
     avatarColor: "#7c3aed",
+    hasCompletedSurvey: true,
   },
   {
     id: "u-admin",
@@ -243,6 +279,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: false,
     avatarColor: "#0ea5e9",
+    hasCompletedSurvey: true,
   },
   {
     id: "u-coord",
@@ -256,6 +293,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: true,
     avatarColor: "#14b8a6",
+    hasCompletedSurvey: true,
   },
   {
     id: "u-coord2",
@@ -269,6 +307,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: true,
     avatarColor: "#f59e0b",
+    hasCompletedSurvey: true,
   },
   {
     id: "u-res",
@@ -282,6 +321,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: false,
     avatarColor: "#ef4444",
+    hasCompletedSurvey: true,
   },
   {
     id: "u-res2",
@@ -295,6 +335,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: false,
     avatarColor: "#8b5cf6",
+    hasCompletedSurvey: true,
   },
   {
     id: "u-res3",
@@ -308,6 +349,7 @@ export const users: User[] = [
     idProofUploaded: true,
     isCoordinator: false,
     avatarColor: "#22c55e",
+    hasCompletedSurvey: true,
   },
 ];
 
@@ -340,6 +382,7 @@ export const societyApplications: SocietyApplication[] = [
     reason: "We want a structured way for residents to help each other.",
     status: "pending",
     submittedAt: "2026-06-20",
+    residentCount: 150,
   },
   {
     id: "app-2",
@@ -351,6 +394,7 @@ export const societyApplications: SocietyApplication[] = [
     reason: "Volunteer coordination platform for our NGO members.",
     status: "pending",
     submittedAt: "2026-07-01",
+    residentCount: 80,
   },
 ];
 
