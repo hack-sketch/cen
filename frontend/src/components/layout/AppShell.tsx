@@ -1,0 +1,271 @@
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useAuth } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  LayoutDashboard,
+  Users,
+  Building2,
+  BarChart3,
+  ClipboardList,
+  ShieldAlert,
+  UserCog,
+  CheckSquare,
+  Calendar,
+  MessageSquare,
+  Megaphone,
+  Wallet,
+  Sparkles,
+  Package,
+  AlertCircle,
+  Menu,
+  LogOut,
+  Repeat,
+  User as UserIcon,
+  X,
+  ChevronRight
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
+import type { Role } from "@/mocks/data";
+import { cn } from "@/lib/utils";
+
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const NAV: Record<Role, NavItem[]> = {
+  owner: [
+    { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/app/owner/applications", label: "Applications", icon: ClipboardList },
+    { to: "/app/owner/societies", label: "Societies", icon: Building2 },
+    { to: "/app/owner/analytics", label: "Analytics", icon: BarChart3 },
+    { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
+  ],
+  admin: [
+    { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/app/admin/onboarding", label: "Member Onboarding", icon: ClipboardList },
+    { to: "/app/admin/residents", label: "Residents Directory", icon: Users },
+    { to: "/app/admin/coordinators", label: "Coordinators Manager", icon: UserCog },
+    { to: "/app/admin/private-complaints", label: "Private Reports", icon: ShieldAlert },
+    { to: "/app/admin/performance", label: "Performance Metrics", icon: BarChart3 },
+    { to: "/app/notices", label: "Notice Board", icon: Megaphone },
+    { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
+  ],
+  coordinator: [
+    { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/app/coord/approvals", label: "Pending Approvals", icon: CheckSquare },
+    { to: "/app/coord/complaints", label: "Reported Complaints", icon: AlertCircle },
+    { to: "/app/coord/disputes", label: "Dispute Mediation", icon: ShieldAlert },
+    { to: "/app/coord/events", label: "Events Coordinator", icon: Calendar },
+    { to: "/app/notices", label: "Notice Board", icon: Megaphone },
+    { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
+  ],
+  resident: [
+    { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/app/skills", label: "Skill Exchange", icon: Sparkles },
+    { to: "/app/resources", label: "Shared Resources", icon: Package },
+    { to: "/app/wallet", label: "My Wallet", icon: Wallet },
+    { to: "/app/events", label: "Events Directory", icon: Calendar },
+    { to: "/app/complaints", label: "My Complaints", icon: AlertCircle },
+    { to: "/app/notices", label: "Broadcast Notices", icon: Megaphone },
+    { to: "/app/chat", label: "Direct Messages", icon: MessageSquare },
+    { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
+  ],
+};
+
+export function AppShell({ children }: { children?: ReactNode }) {
+  const { user, effectiveRole, viewMode, setViewMode, logout } = useAuth();
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [open, setOpen] = useState(false);
+
+  if (!user) return null;
+
+  const nav = NAV[effectiveRole];
+  const isCoord = user.isCoordinator;
+
+  const toggleView = () => {
+    setViewMode(viewMode === "coordinator" ? "resident" : "coordinator");
+    navigate({ to: "/app/dashboard" });
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  return (
+    <div className="min-h-screen bg-panel/30 flex flex-col font-body">
+      {/* Top Header Navigation */}
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-line bg-white/95 backdrop-blur-md px-4 lg:px-8 shadow-sm">
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="lg:hidden hover:bg-surface-variant transition-colors cursor-pointer"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X className="h-5 w-5 text-ink" /> : <Menu className="h-5 w-5 text-ink" />}
+          </Button>
+          
+          <Link to="/app/dashboard" className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-deep-forest flex items-center justify-center text-white font-bold text-base shadow-sm">
+              C
+            </div>
+            <div className="hidden lg:flex flex-col">
+              <span className="font-bold text-ink tracking-tight leading-none text-sm">CEN Network</span>
+              <span className="text-[9px] text-on-surface-variant font-bold uppercase tracking-wider mt-0.5">Community Hub</span>
+            </div>
+          </Link>
+
+          <Badge className="hidden xl:inline-flex bg-deep-forest/10 hover:bg-deep-forest/15 text-deep-forest border border-deep-forest/20 text-[10px] uppercase font-bold py-0.5 px-2.5 rounded-full tracking-wider">
+            {effectiveRole === "owner" ? "System Manager" : effectiveRole}
+          </Badge>
+        </div>
+
+        {/* Top bar Actions */}
+        <div className="flex items-center gap-3">
+          {(effectiveRole === "resident" || effectiveRole === "coordinator") && (
+            <Link to="/app/wallet">
+              <div className="hidden sm:flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-1.5 text-xs hover:bg-panel transition-all shadow-sm">
+                <Wallet className="h-4 w-4 text-deep-forest" />
+                <span className="font-bold text-ink">{user.creditBalance}</span>
+                <span className="text-on-surface-variant hidden md:inline">Credits</span>
+                <span className="text-on-surface-variant inline md:hidden">Crd</span>
+              </div>
+            </Link>
+          )}
+
+          {isCoord && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={toggleView} 
+              className="hidden sm:inline-flex text-[11px] font-bold border-line-strong hover:bg-panel rounded-lg cursor-pointer h-[32px] px-3.5"
+            >
+              <Repeat className="mr-1.5 h-3.5 w-3.5 text-on-surface-variant" />
+              <span className="hidden lg:inline">
+                {viewMode === "coordinator" ? "Resident Console" : "Coordinator Console"}
+              </span>
+              <span className="inline lg:hidden">
+                {viewMode === "coordinator" ? "Resident" : "Coordinator"}
+              </span>
+            </Button>
+          )}
+
+          {/* User Profile Avatar */}
+          <div className="flex items-center gap-2.5 border-l border-line pl-3">
+            <Link to="/app/profile">
+              <div className="h-9 w-9 rounded-full bg-deep-forest/10 border border-deep-forest/20 flex items-center justify-center text-xs font-bold text-deep-forest hover:bg-deep-forest/15 transition-all shadow-inner">
+                {getInitials(user.name)}
+              </div>
+            </Link>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => { logout(); navigate({ to: "/login" }); }}
+              className="hover:bg-rose-50 hover:text-rose-600 transition-all rounded-lg cursor-pointer h-9 w-9 text-on-surface-variant"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-1 relative">
+        {/* Mobile menu overlay background */}
+        {open && (
+          <div 
+            className="fixed inset-0 top-16 bg-slate-900/20 backdrop-blur-sm z-20 lg:hidden"
+            onClick={() => setOpen(false)}
+          />
+        )}
+
+        {/* Sidebar Container */}
+        <aside
+          className={cn(
+            "fixed inset-y-0 top-16 left-0 z-30 w-64 shrink-0 border-r border-line bg-white transition-transform duration-300 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:translate-x-0",
+            open ? "translate-x-0 shadow-xl lg:shadow-none" : "-translate-x-full",
+          )}
+        >
+          <nav className="flex h-full flex-col justify-between p-4 bg-white">
+            <div className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-12rem)] pr-1">
+              <div className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest px-3 mb-2">Navigation</div>
+              {nav.map((item) => {
+                const Icon = item.icon;
+                const active = pathname === item.to || (item.to !== "/app/dashboard" && pathname.startsWith(item.to));
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      "flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold tracking-wide transition-all duration-200 group",
+                      active
+                        ? "bg-deep-forest text-white shadow-sm font-bold"
+                        : "text-ink/80 hover:bg-panel hover:text-ink hover:translate-x-[2px]",
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={cn("h-4 w-4 flex-shrink-0 transition-colors", active ? "text-white" : "text-on-surface-variant group-hover:text-ink")} />
+                      <span>{item.label}</span>
+                    </div>
+                    {!active && <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-all text-on-surface-variant/80" />}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Bottom Profile card */}
+            <div className="mt-4 pt-4 border-t border-line/65 flex flex-col gap-3">
+              <div className="flex items-center gap-3 px-1.5">
+                <div className="h-9 w-9 rounded-xl bg-soft-violet/10 border border-soft-violet/20 flex items-center justify-center text-xs font-bold text-soft-violet flex-shrink-0">
+                  {getInitials(user.name)}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-ink truncate leading-tight">{user.name}</div>
+                  <div className="text-[10px] text-on-surface-variant truncate mt-0.5">{user.email}</div>
+                </div>
+              </div>
+              
+              {isCoord && (
+                <button 
+                  onClick={toggleView}
+                  className="w-full sm:hidden flex items-center justify-center gap-2 border border-line-strong hover:bg-panel text-ink text-[10px] font-bold py-2 rounded-xl cursor-pointer transition-all"
+                >
+                  <Repeat className="h-3.5 w-3.5" /> Toggle Role view
+                </button>
+              )}
+            </div>
+          </nav>
+        </aside>
+
+        {/* Main Work Area */}
+        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8 bg-surface-variant/20 overflow-y-auto">
+          <div key={pathname} className="max-w-6xl mx-auto animate-page-fade">
+            {children ?? <Outlet />}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+  return (
+    <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-line/45 pb-5">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-ink sm:text-2xl font-headline-lg leading-tight">{title}</h1>
+        {description && <p className="mt-1 text-xs text-on-surface-variant leading-normal">{description}</p>}
+      </div>
+      {action && <div className="flex-shrink-0">{action}</div>}
+    </div>
+  );
+}

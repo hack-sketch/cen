@@ -1,0 +1,243 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values.
+ */
+
+@theme inline {
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+  --radius-4xl: 2.5rem;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-on-primary: #ffffff;
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-on-secondary: #ffffff;
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Custom palette from DESIGN.md */
+  --color-primary-container: #2f6f5b;
+  --color-on-primary-container: #aeefd6;
+  --color-secondary-container: #c9b6fe;
+  --color-on-secondary-container: #544583;
+  --color-tertiary: #763c36;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #92534c;
+  --color-on-tertiary-container: #ffdad5;
+  --color-primary-fixed: #aef0d7;
+  --color-primary-fixed-dim: #93d4bb;
+  --color-on-primary-fixed: #002117;
+  --color-on-primary-fixed-variant: #06513e;
+  --color-secondary-fixed: #e8ddff;
+  --color-secondary-fixed-dim: #cebdff;
+  --color-on-secondary-fixed: #200d4c;
+  --color-on-secondary-fixed-variant: #4c3c7a;
+  --color-tertiary-fixed: #ffdad6;
+  --color-tertiary-fixed-dim: #ffb4ab;
+  --color-on-tertiary-fixed: #380c09;
+  --color-on-tertiary-fixed-variant: #6f3630;
+  --color-surface: #f4fbf3;
+  --color-on-surface: #171d19;
+  --color-surface-variant: #dde4dd;
+  --color-on-surface-variant: #404944;
+  --color-inverse-surface: #2b322d;
+  --color-inverse-on-surface: #ecf3eb;
+  --color-outline: #707974;
+  --color-outline-variant: #bfc9c3;
+  --color-surface-tint: #286955;
+  --color-paper: #ffffff;
+  --color-panel: #f4f5f2;
+  --color-root-bg: #dfe2dd;
+  --color-ink: #1f2421;
+  --color-line: #c9cdc7;
+  --color-line-strong: #8f948e;
+  --color-ai-bg: #ece9f5;
+  --color-accent-bg: #e2efe9;
+  --color-danger: #d9534f;
+  --color-warn: #8a5a12;
+  --color-soft-violet: #5b4b8a;
+  --color-deep-forest: #2f6f5b;
+
+  /* Custom Spacings */
+  --spacing-gap-lg: 32px;
+  --spacing-gutter: 20px;
+  --spacing-gap-sm: 16px;
+  --spacing-gap-md: 24px;
+  --spacing-margin-page: 24px;
+  --spacing-padding-card: 20px;
+  --spacing-base: 4px;
+
+  /* Custom Fonts */
+  --font-body-md: "Inter", sans-serif;
+  --font-code-sm: "JetBrains Mono", monospace;
+  --font-headline-lg: "Montserrat", sans-serif;
+  --font-headline-md: "Montserrat", sans-serif;
+  --font-headline-sm: "Montserrat", sans-serif;
+  --font-body-lg: "Inter", sans-serif;
+  --font-metadata: "Inter", sans-serif;
+  --font-label-md: "Inter", sans-serif;
+
+  /* Font Sizes */
+  --text-body-md: 14px;
+  --text-code-sm: 12px;
+  --text-headline-lg: 32px;
+  --text-headline-md: 20px;
+  --text-headline-sm: 16px;
+  --text-body-lg: 16px;
+  --text-metadata: 12px;
+  --text-label-md: 13px;
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: #f4fbf3;
+  --foreground: #171d19;
+  --card: #ffffff;
+  --card-foreground: #171d19;
+  --popover: #ffffff;
+  --popover-foreground: #171d19;
+  --primary: #105644;
+  --primary-foreground: #ffffff;
+  --secondary: #645494;
+  --secondary-foreground: #ffffff;
+  --muted: #dde4dd;
+  --muted-foreground: #404944;
+  --accent: #eff5ee;
+  --accent-foreground: #171d19;
+  --destructive: #ba1a1a;
+  --destructive-foreground: #ffffff;
+  --border: #c9cdc7;
+  --input: #c9cdc7;
+  --ring: #707974;
+}
+
+.dark {
+  --background: #171d19;
+  --foreground: #f4fbf3;
+  --card: #2b322d;
+  --card-foreground: #ecf3eb;
+  --popover: #2b322d;
+  --popover-foreground: #ecf3eb;
+  --primary: #93d4bb;
+  --primary-foreground: #002117;
+  --secondary: #cebdff;
+  --secondary-foreground: #200d4c;
+  --muted: #404944;
+  --muted-foreground: #bfc9c3;
+  --accent: #2b322d;
+  --accent-foreground: #ecf3eb;
+  --destructive: #ffb4ab;
+  --destructive-foreground: #380c09;
+  --border: #404944;
+  --input: #404944;
+  --ring: #bfc9c3;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body-md);
+  }
+
+  button, 
+  [role="button"] {
+    transition: all 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  button:hover:not(:disabled),
+  [role="button"]:hover:not(:disabled) {
+    transform: translateY(-0.5px);
+    filter: brightness(1.025);
+  }
+
+  button:active:not(:disabled),
+  [role="button"]:active:not(:disabled) {
+    transform: translateY(0.5px) scale(0.985);
+  }
+}
+
+/* Custom Styles */
+.hero-gradient {
+  background: linear-gradient(135deg, #f4fbf3 0%, #eff5ee 50%, #e9f0e8 100%);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes float-delayed {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 8s ease-in-out infinite;
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-page-fade {
+  animation: page-fade-in 0.42s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+
+
