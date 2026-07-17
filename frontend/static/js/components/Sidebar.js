@@ -70,7 +70,7 @@ export default {
 
           <!-- ADMIN: The President (High-level Management) -->
           <template v-if="role === 'admin'">
-            <a href="#/admin" :class="getLinkClass('Dashboard')">🏠 President Overview</a>
+            <a href="#/admin" :class="getLinkClass('Dashboard')">🏠 Overview</a>
             <a href="#/admin/residents" :class="getLinkClass('Residents')">👥 User Management</a>
             <a href="#/admin/analytics" :class="getLinkClass('Analytics')">📈 System Analytics</a>
             <a href="#/admin/reports" :class="getLinkClass('Reports')">📊 Financial Reports</a>
@@ -104,7 +104,7 @@ export default {
             <a href="#/provider/skills" :class="getLinkClass('My Skills')">🛠️ My Skills</a>
             <a href="#/provider/add-skill" :class="getLinkClass('Add Skill')">➕ Add Skill</a>
             <a href="#/provider/bookings" :class="getLinkClass('Bookings')">📅 Bookings</a>
-            <a href="#/provider/history" :class="getLinkClass('History')">📚 Teaching History</a>
+            <a href="#/provider/history" :class="getLinkClass('History')">📚  History</a>
           </template>
 
           <!-- RESOURCE OWNER -->

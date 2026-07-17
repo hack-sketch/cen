@@ -221,7 +221,7 @@ export default {
                 <td>{{ complaint.date }}</td>
                 <td>
                   <button class="btn btn-info btn-sm me-2 text-white fw-semibold" @click="viewDetails(complaint)">View</button>
-                  <button class="btn btn-danger btn-sm fw-semibold" @click="deleteComplaint(complaint)">Delete</button>
+                  <button v-if="currentRole === 'coordinator'" class="btn btn-danger btn-sm fw-semibold" @click="deleteComplaint(complaint)">Delete</button>
                 </td>
               </tr>
             </tbody>
@@ -262,9 +262,14 @@ export default {
           </div>
           
           <div class="modal-footer border-top-0 pt-0 justify-content-center d-flex gap-2">
-            <button type="button" class="btn btn-light border flex-fill fw-semibold text-secondary" @click="resolveDispute('Dismiss')">Dismiss</button>
-            <button type="button" class="btn btn-primary flex-fill fw-semibold" @click="resolveDispute('Split 50/50')">Split 50/50</button>
-            <button type="button" class="btn btn-danger flex-fill fw-semibold" @click="resolveDispute('Refund')">Refund User</button>
+            <template v-if="currentRole === 'coordinator'">
+              <button type="button" class="btn btn-light border flex-fill fw-semibold text-secondary" @click="resolveDispute('Dismiss')">Dismiss</button>
+              <button type="button" class="btn btn-primary flex-fill fw-semibold" @click="resolveDispute('Split 50/50')">Split 50/50</button>
+              <button type="button" class="btn btn-danger flex-fill fw-semibold" @click="resolveDispute('Refund')">Refund User</button>
+            </template>
+            <template v-else>
+              <button type="button" class="btn btn-secondary w-100 fw-semibold text-white" data-bs-dismiss="modal">Close</button>
+            </template>
           </div>
 
         </div>

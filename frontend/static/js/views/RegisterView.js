@@ -19,34 +19,24 @@ export default {
                 </div>
               </div>
 
+              <div class="mb-3">
+                <label class="form-label">Phone Number</label>
+                <input type="text" class="form-control" placeholder="Enter Phone Number" v-model="user.phone">
+              </div>
+
               <div class="row">
                 <div class="col-md-6 mb-3">
-                  <label class="form-label">Phone Number</label>
-                  <input type="text" class="form-control" placeholder="Enter Phone Number" v-model="user.phone">
+                  <label class="form-label">Password</label>
+                  <input type="password" class="form-control" placeholder="Enter Password" v-model="user.password">
                 </div>
                 <div class="col-md-6 mb-3">
-                  <label class="form-label">Role</label>
-                  <select class="form-select" v-model="user.role">
-                    <option value="">Select Role</option>
-                    <option>Resident</option>
-                    <option>Resource Owner</option>
-                    <option>Skill Provider</option>
-                  </select>
+                  <label class="form-label">Confirm Password</label>
+                  <input type="password" class="form-control" placeholder="Confirm Password" v-model="confirmPassword">
                 </div>
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-control" placeholder="Enter Password" v-model="user.password">
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label">Confirm Password</label>
-                <input type="password" class="form-control" placeholder="Confirm Password" v-model="confirmPassword">
               </div>
 
               <!-- Centered Register Button -->
-              <div class="text-center">
+              <div class="text-center mt-3">
                 <button class="btn btn-success w-50 fw-semibold" @click="register">Register</button>
               </div>
 
@@ -71,7 +61,6 @@ export default {
         name: "",
         email: "",
         phone: "",
-        role: "",
         password: ""
       },
       confirmPassword: ""
@@ -83,7 +72,6 @@ export default {
       if (
         this.user.name === "" ||
         this.user.email === "" ||
-        this.user.role === "" ||
         this.user.password === ""
       ) {
         alert("Please fill all required fields.");

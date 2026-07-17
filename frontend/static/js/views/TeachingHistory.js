@@ -37,7 +37,7 @@ export default {
     <!-- Main Content -->
     <div class="container mt-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="fw-bold">Teaching History</h2>
+        <h2 class="fw-bold"> History</h2>
         <button class="btn btn-danger btn-sm fw-semibold" @click="exportHistory">⬇ Export History</button>
       </div>
 
