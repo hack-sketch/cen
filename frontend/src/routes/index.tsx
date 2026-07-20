@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, Play, Pause } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -1101,7 +1102,7 @@ function Landing() {
               </div>
 
               {/* Status Narration Banner with Fixed Height and Keyed Fade-In to Prevent Reflow Shift Glitches */}
-              <div className="mt-6 p-4 rounded-xl bg-deep-forest/5 border border-deep-forest/10 flex items-start gap-3 min-h-[92px] sm:min-h-[76px] transition-all duration-300">
+              <div className="mt-6 p-4 rounded-xl bg-deep-forest/5 border border-deep-forest/10 flex items-start gap-3 min-h-[168px] sm:min-h-[96px] md:min-h-[76px] transition-all duration-300">
                 <div className="w-6 h-6 rounded-full bg-deep-forest/15 text-deep-forest flex items-center justify-center flex-shrink-0 text-xs font-bold">
                   {simStep === 0 && "1"}
                   {simStep === 1 && "2"}
@@ -1138,7 +1139,7 @@ function Landing() {
 
       {/* Features & Achievements Carousel Section */}
       <section className="py-24 bg-white border-b border-line/50" id="features-showcase">
-        <div className="container mx-auto px-margin-page max-w-6xl">
+        <div className="container mx-auto px-6 sm:px-8 max-w-6xl">
           <div className="text-center mb-16">
             <ScrollReveal duration={600}>
               <span className="inline-flex items-center gap-2 py-1 px-3.5 bg-soft-violet/10 text-soft-violet font-metadata text-[10px] rounded-full mb-4 tracking-wider uppercase font-bold border border-soft-violet/20">
@@ -1457,21 +1458,21 @@ function Landing() {
       <section className="py-24 bg-ink text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-1/3 h-1/2 bg-soft-violet/10 blur-[120px] rounded-full"></div>
         <div className="absolute bottom-0 left-0 w-1/4 h-1/3 bg-deep-forest/10 blur-[100px] rounded-full"></div>
-        <div className="container mx-auto px-margin-page max-w-7xl">
+        <div className="container mx-auto px-6 sm:px-8 max-w-7xl">
           <div className="grid lg:grid-cols-2 gap-24 items-center">
             <div className="order-2 lg:order-1">
-              <ScrollReveal duration={600} direction="left">
-                <div className="bg-white/5 p-8 rounded-[1.75rem] border border-white/10 glass-panel backdrop-blur-xl relative overflow-hidden">
+              <ScrollReveal duration={600} direction="up">
+                <div className="bg-white/5 p-6 sm:p-8 rounded-[1.75rem] border border-white/10 glass-panel backdrop-blur-xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-6">
                     <span className="material-symbols-outlined text-white/5 text-7xl">
                       monitoring
                     </span>
                   </div>
-                  <div className="flex justify-between items-center mb-8 relative z-10">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 mb-8 relative z-10">
                     <div className="text-primary-fixed text-lg font-bold">
                       Sentiment Dashboard
                     </div>
-                    <div className="bg-primary/20 text-primary-fixed px-3 py-0.5 rounded-full text-[10px] border border-primary-fixed/20 uppercase font-bold tracking-widest">
+                    <div className="bg-primary/20 text-primary-fixed px-3 py-0.5 rounded-full text-[10px] border border-primary-fixed/20 uppercase font-bold tracking-widest w-fit">
                       Real-time
                     </div>
                   </div>
@@ -1520,7 +1521,7 @@ function Landing() {
               </ScrollReveal>
             </div>
             <div className="order-1 lg:order-2">
-              <ScrollReveal duration={600} direction="right">
+              <ScrollReveal duration={600} direction="up">
                 <div className="inline-block py-1 px-3 bg-soft-violet/20 text-soft-violet font-metadata text-[10px] rounded-full mb-6 tracking-wider uppercase border border-soft-violet/30 font-bold">
                   Enterprise Coordinator
                 </div>
@@ -1576,7 +1577,7 @@ function Landing() {
       {/* Final CTA */}
       <section className="py-32 bg-deep-forest text-on-primary relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg')] opacity-5 mix-blend-overlay"></div>
-        <div className="container mx-auto px-margin-page max-w-4xl text-center relative z-10">
+        <div className="container mx-auto px-6 sm:px-8 max-w-4xl text-center relative z-10">
           <ScrollReveal duration={600}>
             <h2 className="font-headline-lg text-4xl sm:text-5xl mb-6 leading-tight font-bold tracking-tight">
               Ready to strengthen your community?

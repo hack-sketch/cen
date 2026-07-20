@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { creditService } from "@/services";
 import { useAuth } from "@/lib/auth";
 import { Wallet, ArrowUpRight, ArrowDownLeft, Calendar, HelpCircle, Activity } from "lucide-react";
+import { getInitials } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/wallet")({ component: Page });
 
@@ -25,9 +26,6 @@ function Page() {
     ?.filter(t => t.type === "spent")
     .reduce((sum, t) => sum + t.amount, 0) ?? 0;
 
-  const getInitials = (name: string) => {
-    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-  };
 
   return (
     <div className="space-y-6 pb-12">

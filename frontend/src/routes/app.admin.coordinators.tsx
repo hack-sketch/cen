@@ -56,7 +56,7 @@ function Page() {
             await userService.promote(sel);
             setSel(""); qc.invalidateQueries({ queryKey: ["allRes", sid] });
             toast.success("Promoted to coordinator");
-          }} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 px-5 rounded-lg shadow-sm cursor-pointer active:scale-98 transition-all">
+          }} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 px-5 rounded-lg shadow-sm cursor-pointer active:scale-98 transition-all w-full sm:w-auto">
             Promote to Coordinator
           </Button>
         </div>
@@ -65,12 +65,12 @@ function Page() {
       <div className="space-y-3">
         {coords.map((c) => (
           <Card key={c.id} className="border-line/60 shadow-sm hover:shadow-md transition-all duration-300 bg-white">
-            <CardContent className="p-5 flex items-center justify-between gap-4">
-              <div>
-                <div className="font-bold text-base text-ink">{c.name}</div>
-                <div className="text-sm text-on-surface-variant mt-1">{c.email}</div>
+            <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="font-bold text-base text-ink truncate">{c.name}</div>
+                <div className="text-sm text-on-surface-variant mt-1 truncate">{c.email}</div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 justify-between sm:justify-end w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-line/40">
                 <Badge className="bg-purple-50 border-purple-200 text-purple-800 text-xs font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full pointer-events-none border">Coordinator</Badge>
                 <Button variant="outline" size="sm" className="text-xs font-semibold h-9 px-3 border-line-strong hover:bg-panel cursor-pointer text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => setConfirmDemote({ id: c.id, name: c.name })}>Remove</Button>
               </div>

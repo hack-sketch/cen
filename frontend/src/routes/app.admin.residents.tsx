@@ -19,23 +19,36 @@ function Page() {
     <div>
       <PageHeader title="Residents" description="Read-only roster." />
       <Input placeholder="Search residents…" value={q} onChange={(e) => setQ(e.target.value)} className="mb-4 max-w-sm" />
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-left"><tr>
-            <th className="p-3">Name</th><th className="p-3">Household</th><th className="p-3">Role</th><th className="p-3 text-right">Credits</th>
-          </tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t">
-                <td className="p-3 font-medium">{r.name}</td>
-                <td className="p-3 text-muted-foreground">{r.householdId ?? "—"}</td>
-                <td className="p-3"><Badge variant={r.isCoordinator ? "default" : "secondary"}>{r.isCoordinator ? "Coordinator" : "Resident"}</Badge></td>
-                <td className="p-3 text-right">{r.creditBalance}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <Card>
+        <CardContent className="p-0">
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-sm min-w-[500px]">
+              <thead className="bg-muted/40 text-left">
+                <tr>
+                  <th className="p-3 whitespace-nowrap">Name</th>
+                  <th className="p-3 whitespace-nowrap">Household</th>
+                  <th className="p-3 whitespace-nowrap">Role</th>
+                  <th className="p-3 text-right whitespace-nowrap">Credits</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} className="border-t">
+                    <td className="p-3 font-medium whitespace-nowrap">{r.name}</td>
+                    <td className="p-3 text-muted-foreground whitespace-nowrap">{r.householdId ?? "—"}</td>
+                    <td className="p-3 whitespace-nowrap">
+                      <Badge variant={r.isCoordinator ? "default" : "secondary"}>
+                        {r.isCoordinator ? "Coordinator" : "Resident"}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-right whitespace-nowrap font-semibold">{r.creditBalance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

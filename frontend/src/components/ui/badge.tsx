@@ -14,6 +14,7 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
+        custom: "",
       },
     },
     defaultVariants: {
@@ -26,7 +27,10 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  // If variant is not explicitly provided and className contains custom styling, default to 'custom' variant
+  const hasCustomStyles = className && (className.includes("bg-") || className.includes("text-") || className.includes("border-"));
+  const resolvedVariant = variant === undefined && hasCustomStyles ? "custom" : (variant ?? "default");
+  return <div className={cn(badgeVariants({ variant: resolvedVariant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };

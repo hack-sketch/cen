@@ -59,10 +59,25 @@ function RequestSociety() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center bg-panel/10">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-deep-forest/20 border-t-deep-forest rounded-full animate-spin"></div>
-          <span className="text-xs font-bold text-ink/65 uppercase tracking-wider">Verifying Session...</span>
+      <div className="min-h-screen grid place-items-center bg-panel/10 font-body">
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative flex items-center justify-center w-16 h-16">
+            <div className="absolute inset-0 rounded-full border border-dashed border-deep-forest/40 animate-[spin_8s_linear_infinite]" />
+            <div className="absolute w-11 h-11 rounded-full border-2 border-t-soft-violet border-r-transparent border-b-soft-violet border-l-transparent animate-[spin_1.5s_linear_infinite_reverse]" />
+            {/* Core pulsing brand gradient sphere with a central 'C' */}
+            <div className="absolute w-7 h-7 rounded-full bg-gradient-to-tr from-deep-forest to-soft-violet flex items-center justify-center shadow-md shadow-deep-forest/20 animate-pulse">
+              <span className="text-[10px] font-extrabold text-white select-none leading-none">C</span>
+            </div>
+            <div className="absolute w-4 h-4 rounded-full bg-white opacity-40 animate-ping" />
+          </div>
+          <div className="flex flex-col items-center gap-1.5 text-center">
+            <span className="text-[10px] font-bold text-ink uppercase tracking-[0.3em] animate-pulse">
+              Verifying Session
+            </span>
+            <span className="text-[9px] text-on-surface-variant font-medium tracking-wide">
+              Establishing community credentials...
+            </span>
+          </div>
         </div>
       </div>
     );

@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, Link, redirect } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
@@ -13,6 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/app")({
+  beforeLoad: () => {
+    if (typeof window !== "undefined") {
+      const currentUserId = localStorage.getItem("cen.currentUserId");
+      if (!currentUserId) {
+        throw redirect({ to: "/login" });
+      }
+    }
+  },
   component: AppLayout,
 });
 
@@ -77,9 +85,24 @@ function AppLayout() {
   if (loading || requestStatus === "loading") {
     return (
       <div className="grid min-h-screen place-items-center bg-panel/20 font-body">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-deep-forest/20 border-t-deep-forest rounded-full animate-spin"></div>
-          <span className="text-xs font-bold text-ink/65 uppercase tracking-wider">Loading CEN Console...</span>
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative flex items-center justify-center w-16 h-16">
+            <div className="absolute inset-0 rounded-full border border-dashed border-deep-forest/40 animate-[spin_8s_linear_infinite]" />
+            <div className="absolute w-11 h-11 rounded-full border-2 border-t-soft-violet border-r-transparent border-b-soft-violet border-l-transparent animate-[spin_1.5s_linear_infinite_reverse]" />
+            {/* Core pulsing brand gradient sphere with a central 'C' */}
+            <div className="absolute w-7 h-7 rounded-full bg-gradient-to-tr from-deep-forest to-soft-violet flex items-center justify-center shadow-md shadow-deep-forest/20 animate-pulse">
+              <span className="text-[10px] font-extrabold text-white select-none leading-none">C</span>
+            </div>
+            <div className="absolute w-4 h-4 rounded-full bg-white opacity-40 animate-ping" />
+          </div>
+          <div className="flex flex-col items-center gap-1.5 text-center">
+            <span className="text-[10px] font-bold text-ink uppercase tracking-[0.3em] animate-pulse">
+              Loading Console
+            </span>
+            <span className="text-[9px] text-on-surface-variant font-medium tracking-wide">
+              Initializing secure session...
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -707,15 +730,23 @@ export function OnboardingSurveyModal({
         {step === 5 && (
           <div className="flex flex-col items-center gap-4 py-8 text-center animate-page-fade">
             {calibrating ? (
-              <>
-                <div className="w-12 h-12 border-4 border-deep-forest/20 border-t-deep-forest rounded-full animate-spin"></div>
+              <div className="flex flex-col items-center gap-5 py-4 text-center">
+                <div className="relative flex items-center justify-center w-14 h-14">
+                  <div className="absolute inset-0 rounded-full border border-dashed border-deep-forest/40 animate-[spin_8s_linear_infinite]" />
+                  <div className="absolute w-9 h-9 rounded-full border-2 border-t-soft-violet border-r-transparent border-b-soft-violet border-l-transparent animate-[spin_1.5s_linear_infinite_reverse]" />
+                  {/* Core pulsing brand gradient sphere with a central 'C' */}
+                  <div className="absolute w-6 h-6 rounded-full bg-gradient-to-tr from-deep-forest to-soft-violet flex items-center justify-center shadow-md shadow-deep-forest/20 animate-pulse">
+                    <span className="text-[9px] font-extrabold text-white select-none leading-none">C</span>
+                  </div>
+                  <div className="absolute w-3.5 h-3.5 rounded-full bg-white opacity-40 animate-ping" />
+                </div>
                 <div>
-                  <div className="text-sm font-bold text-ink uppercase tracking-wider animate-pulse">Calibrating AI Suggestions...</div>
+                  <div className="text-xs font-bold text-ink uppercase tracking-widest animate-pulse">Calibrating AI Suggestions...</div>
                   <p className="text-[10px] text-on-surface-variant mt-1.5 leading-normal max-w-xs">
                     Indexing your interests against active society requests and event coordinates to matching suggestions...
                   </p>
                 </div>
-              </>
+              </div>
             ) : (
               <>
                 <CheckCircle2 className="h-14 w-14 text-emerald-600 animate-bounce" />

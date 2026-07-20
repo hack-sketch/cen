@@ -9,7 +9,7 @@ import { chatbotQuery } from "@/services/ai";
 import { useAuth } from "@/lib/auth";
 import { useState, useEffect, useRef } from "react";
 import { Bot, Send, User as UserIcon, Search, Sparkles, MessagesSquare } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/chat")({ component: Page });
 
@@ -23,9 +23,6 @@ function Page() {
   const list = contacts.data?.filter((u) => u.id !== user!.id) ?? [];
   const filteredList = list.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const getInitials = (name: string) => {
-    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-  };
 
   return (
     <div className="space-y-6 pb-6">

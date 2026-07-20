@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { Role } from "@/mocks/data";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 
 interface NavItem {
   to: string;
@@ -89,6 +89,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const { user, effectiveRole, viewMode, setViewMode, logout } = useAuth();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isLoading = useRouterState({ select: (s) => s.status === "pending" });
   const [open, setOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -102,17 +103,15 @@ export function AppShell({ children }: { children?: ReactNode }) {
     navigate({ to: "/app/dashboard" });
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
 
   return (
     <div className="min-h-screen bg-panel/30 flex flex-col font-body">
+      {/* Sleek top loading progress bar */}
+      {isLoading && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-0.5 bg-line-strong overflow-hidden">
+          <div className="h-full bg-deep-forest w-full -translate-x-full animate-loading-bar" />
+        </div>
+      )}
       {/* Top Header Navigation */}
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-line bg-white/95 backdrop-blur-md px-4 lg:px-8 shadow-sm">
         <div className="flex items-center gap-4">
@@ -260,8 +259,35 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
         {/* Main Work Area */}
         <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8 bg-surface-variant/20 overflow-y-auto">
-          <div key={pathname} className="max-w-6xl mx-auto animate-page-fade">
-            {children ?? <Outlet />}
+          <div 
+            key={pathname} 
+            className="max-w-6xl mx-auto animate-page-fade"
+          >
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-40 gap-5">
+                <div className="relative flex items-center justify-center w-16 h-16">
+                  {/* Outer green loop matching ring */}
+                  <div className="absolute inset-0 rounded-full border border-dashed border-deep-forest/40 animate-[spin_8s_linear_infinite]" />
+                  {/* Mid violet transaction flow arc */}
+                  <div className="absolute w-11 h-11 rounded-full border-2 border-t-soft-violet border-r-transparent border-b-soft-violet border-l-transparent animate-[spin_1.5s_linear_infinite_reverse]" />
+                  {/* Core pulsing brand gradient sphere with a central 'C' */}
+                  <div className="absolute w-7 h-7 rounded-full bg-gradient-to-tr from-deep-forest to-soft-violet flex items-center justify-center shadow-md shadow-deep-forest/20 animate-pulse">
+                    <span className="text-[10px] font-extrabold text-white select-none leading-none">C</span>
+                  </div>
+                  <div className="absolute w-4 h-4 rounded-full bg-white opacity-40 animate-ping" />
+                </div>
+                <div className="flex flex-col items-center gap-1.5 text-center">
+                  <span className="text-[10px] font-bold text-ink uppercase tracking-[0.3em] animate-pulse">
+                    Connecting Loop
+                  </span>
+                  <span className="text-[9px] text-on-surface-variant font-medium tracking-wide">
+                    Resolving community exchange ledger...
+                  </span>
+                </div>
+              </div>
+            ) : (
+              children ?? <Outlet />
+            )}
           </div>
         </main>
       </div>

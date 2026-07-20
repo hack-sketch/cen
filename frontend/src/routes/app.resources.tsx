@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/AppShell";
+import { ExchangeItemCard } from "@/components/layout/ExchangeItemCard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,10 +23,21 @@ import {
 import { resourceService } from "@/services";
 import { autoTag, matchSkillResource, type MatchResult } from "@/services/ai";
 import { useAuth } from "@/lib/auth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Sparkles, Plus, Search, Filter, HelpCircle, Package, ArrowRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/resources")({ component: Page });
 
@@ -171,7 +183,20 @@ function Page() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filtered.map((r) => (
-                <ResourceCard key={r.id} r={r} />
+                <ExchangeItemCard
+                  key={r.id}
+                  id={r.id}
+                  title={r.name}
+                  description={r.description}
+                  category={r.category}
+                  credits={r.credits}
+                  providerName={r.ownerName}
+                  providerId={r.ownerId}
+                  available={r.available}
+                  type="resource"
+                  onAction={(id, userId) => resourceService.borrow(id, userId)}
+                  categoryColors={CAT_COLORS}
+                />
               ))}
             </div>
           )}
@@ -225,125 +250,74 @@ function Page() {
   );
 }
 
-function ResourceCard({ r }: { r: import("@/mocks/data").Resource }) {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  const [showConfirm, setShowConfirm] = useState(false);
 
-  const getInitials = (name: string) => {
-    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-  };
+const resourceFormSchema = z.object({
+  name: z.string().min(3, "Name must be at least 3 characters").max(100, "Name is too long"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+  category: z.string().min(1, "Category is required"),
+  credits: z.preprocess(
+    (val) => (val === "" ? undefined : Number(val)),
+    z.number({ invalid_type_error: "Credits must be a number" }).min(1, "Credits must be at least 1")
+  ),
+});
 
-  const isOwner = r.ownerId === user!.id;
-  const insCredits = user!.creditBalance < r.credits;
-
-  return (
-    <>
-      <Card className="border-line/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden bg-white">
-        <CardContent className="p-5 flex flex-col justify-between flex-1 space-y-4">
-          <div className="space-y-2">
-            {/* Card Category pill and Credit cost */}
-            <div className="flex justify-between items-center">
-              <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide", CAT_COLORS[r.category] || "bg-slate-50")}>
-                {r.category}
-              </span>
-              <div className="inline-flex items-center gap-1 bg-deep-forest/5 text-deep-forest border border-deep-forest/15 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
-                {r.credits} Credits
-              </div>
-            </div>
-
-            <h3 className="font-bold text-sm text-ink leading-snug line-clamp-1">{r.name}</h3>
-            
-            <div className="flex items-center gap-2 pt-1">
-              <div className="w-6 h-6 rounded-full bg-deep-forest/5 text-deep-forest border border-deep-forest/15 flex items-center justify-center text-[9px] font-bold">
-                {getInitials(r.ownerName)}
-              </div>
-              <span className="text-[10px] text-on-surface-variant font-medium">Lent by <span className="font-bold text-ink">{r.ownerName}</span></span>
-            </div>
-
-            <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 pt-1">{r.description}</p>
-          </div>
-
-          <div className="space-y-3.5">
-            {/* Availability badge */}
-            <div>
-              {r.available ? (
-                <Badge className="bg-emerald-50 border-emerald-100 text-emerald-800 text-[9px] font-bold uppercase tracking-wider">
-                  Available to Borrow
-                </Badge>
-              ) : (
-                <Badge className="bg-amber-50 border-amber-100 text-amber-800 text-[9px] font-bold uppercase tracking-wider">
-                  Currently Borrowed
-                </Badge>
-              )}
-            </div>
-
-            {/* Book button */}
-            <Button
-              disabled={!r.available || isOwner || insCredits}
-              onClick={() => setShowConfirm(true)}
-              className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
-            >
-              {isOwner ? "My Item" : !r.available ? "Out of Stock" : insCredits ? `Insufficient Credits (${r.credits} Crd needed)` : "Request to Borrow"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-          <AlertDialogHeader className="space-y-2">
-            <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
-              <Package className="h-5 w-5 text-deep-forest flex-shrink-0" />
-              Request to Borrow
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
-              Are you sure you want to borrow <span className="font-bold text-ink">"{r.name}"</span> from <span className="font-semibold text-ink">{r.ownerName}</span>? This will spend <span className="font-bold text-deep-forest">{r.credits} Credits</span> from your balance.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="mt-5 flex gap-2">
-            <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={async () => {
-                await resourceService.borrow(r.id, user!.id);
-                qc.invalidateQueries();
-                toast.success(`Request sent: Borrowed ${r.name}`);
-                setShowConfirm(false);
-              }}
-              className="h-9 px-4 text-xs font-semibold rounded-lg bg-deep-forest hover:bg-deep-forest/90 text-white cursor-pointer active:scale-98 transition-all"
-            >
-              Confirm Request
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
+type ResourceFormValues = z.infer<typeof resourceFormSchema>;
 
 function NewResDialog() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<{ name: string; description: string; category: string; credits: number | string }>({ name: "", description: "", category: "General", credits: 2 });
   const [autotagging, setAutotagging] = useState(false);
 
+  const form = useForm<ResourceFormValues>({
+    resolver: zodResolver(resourceFormSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      category: "General",
+      credits: 2,
+    },
+  });
+
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (!open) {
+      form.reset();
+    }
+  }, [open, form.reset]);
+
   const suggest = async () => {
-    if (!form.name.trim() || !form.description.trim()) {
+    const name = form.getValues("name");
+    const description = form.getValues("description");
+    if (!name.trim() || !description.trim()) {
       return toast.warning("Please input both Name and Description before auto-tagging.");
     }
     setAutotagging(true);
     try {
-      const { category } = await autoTag(`${form.name} ${form.description}`);
-      setForm((f) => ({ ...f, category }));
+      const { category } = await autoTag(`${name} ${description}`);
+      form.setValue("category", category);
       toast.success("Suggestions applied!");
     } catch {
       toast.error("Auto tagging failed.");
     } finally {
       setAutotagging(false);
     }
+  };
+
+  const onSubmit = async (values: ResourceFormValues) => {
+    await resourceService.create({
+      name: values.name,
+      description: values.description,
+      category: values.category,
+      credits: values.credits,
+      available: true,
+      ownerId: user!.id,
+      ownerName: user!.name,
+      societyId: user!.societyId!,
+    });
+    setOpen(false);
+    qc.invalidateQueries();
+    toast.success("Resource listing submitted for coordinator approval.");
   };
 
   return (
@@ -358,75 +332,102 @@ function NewResDialog() {
           <DialogTitle className="text-base font-bold text-ink">List a Shared Resource</DialogTitle>
           <CardDescription className="text-xs text-on-surface-variant">Lend equipment, tools, or appliances to your neighbors to collect exchange credits.</CardDescription>
         </DialogHeader>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1">
-            <Label className="text-xs font-bold text-ink">Resource Name</Label>
-            <Input 
-              placeholder="e.g. Electric Lawn Mower (1200W)" 
-              value={form.name} 
-              onChange={(e) => setForm({ ...form, name: e.target.value })} 
-              className="text-xs rounded-lg border-line-strong/60"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Resource Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. Electric Lawn Mower (1200W)" 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
             />
-          </div>
-          
-          <div className="space-y-1">
-            <Label className="text-xs font-bold text-ink">Description & Rules</Label>
-            <Textarea 
-              placeholder="Describe the item condition, lending duration limit, and return guidelines..." 
-              value={form.description} 
-              onChange={(e) => setForm({ ...form, description: e.target.value })} 
-              className="text-xs rounded-lg border-line-strong/60 min-h-[80px]"
-            />
-          </div>
-
-          <Button 
-            variant="outline" 
-            size="sm" 
-            type="button" 
-            onClick={suggest}
-            disabled={autotagging}
-            className="text-[10px] font-bold border-line-strong/60 hover:bg-soft-violet/5 hover:border-soft-violet/40 cursor-pointer"
-          >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5 text-soft-violet animate-pulse" />
-            {autotagging ? "Analyzing content..." : "Suggest Category (AI)"}
-          </Button>
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-ink">Category</Label>
-              <Input 
-                placeholder="e.g. Tools, Electronics" 
-                value={form.category} 
-                onChange={(e) => setForm({ ...form, category: e.target.value })} 
-                className="h-9 text-xs rounded-lg border-line-strong/60"
-              />
-            </div>
             
-            <div className="space-y-1">
-              <Label className="text-xs font-bold text-ink">Credits (Lending rate)</Label>
-              <Input 
-                type="number" 
-                value={form.credits} 
-                onChange={(e) => setForm({ ...form, credits: e.target.value === "" ? "" : Number(e.target.value) })} 
-                className="h-9 text-xs rounded-lg border-line-strong/60"
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Description & Rules</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Describe the item condition, lending duration limit, and return guidelines..." 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60 min-h-[80px]"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
+            />
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              type="button" 
+              onClick={suggest}
+              disabled={autotagging}
+              className="text-[10px] font-bold border-line-strong/60 hover:bg-soft-violet/5 hover:border-soft-violet/40 cursor-pointer"
+            >
+              <Sparkles className="mr-1.5 h-3.5 w-3.5 text-soft-violet animate-pulse" />
+              {autotagging ? "Analyzing content..." : "Suggest Category (AI)"}
+            </Button>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-bold text-ink">Category</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="e.g. Tools, Electronics" 
+                        {...field} 
+                        className="h-9 text-xs rounded-lg border-line-strong/60"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[10px] text-destructive" />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="credits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-bold text-ink">Credits (Lending rate)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        className="h-9 text-xs rounded-lg border-line-strong/60"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[10px] text-destructive" />
+                  </FormItem>
+                )}
               />
             </div>
-          </div>
 
-          <Button 
-            onClick={async () => {
-              await resourceService.create({
-                ...form, credits: Number(form.credits) || 0, available: true, ownerId: user!.id, ownerName: user!.name, societyId: user!.societyId!,
-              });
-              setOpen(false); 
-              qc.invalidateQueries();
-              toast.success("Resource listing submitted for coordinator approval.");
-            }}
-            className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-10 rounded-lg text-xs cursor-pointer shadow-sm pt-0.5"
-          >
-            Submit Listing
-          </Button>
-        </div>
+            <Button 
+              type="submit"
+              className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-10 rounded-lg text-xs cursor-pointer shadow-sm pt-0.5"
+            >
+              Submit Listing
+            </Button>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
