@@ -1,0 +1,468 @@
+openapi: 3.0.3
+info:
+  title: Community Exchange Network (CEN) API
+  description: |
+    Comprehensive RESTful API for Community Exchange Network (CEN) - Milestone 3 (Sprint 1) Deliverable.
+    Enables hyper-local time-credit banking, shared resource management, skill exchanges, society onboarding, AI-driven automation, and community governance.
+  version: 1.0.0
+  contact:
+    name: Team 094 Development Team
+    email: dev@cen.app
+
+servers:
+  - url: http://localhost:8000
+    description: Local Development Server
+
+paths:
+  # Authentication APIs
+  /api/v1/auth/signup:
+    post:
+      summary: Register a new user
+      description: |
+        **User Story Mapping (US-01):** As a prospective resident or admin, I want to sign up for an account so that I can participate in the network.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                name:
+                  type: string
+                  example: "Alice Smith"
+                email:
+                  type: string
+                  format: email
+                  example: "alice@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "Password123!"
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate user and issue JWT access token
+      description: |
+        **User Story Mapping (US-02):** As a registered user, I want to log in securely using credentials to get a session JWT token.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  example: "admin@cen.app"
+                password:
+                  type: string
+                  example: "password123"
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  tokenType:
+                    type: string
+                    example: "bearer"
+                  user:
+                    $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/auth/me:
+    get:
+      summary: Get current authenticated user profile
+      description: |
+        **User Story Mapping (US-03):** As an authenticated user, I want to retrieve my profile information.
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  # Society Management APIs
+  /api/v1/societies/request:
+    post:
+      summary: Submit a new society setup application
+      description: |
+        **User Story Mapping (US-04):** As a society founder/admin, I want to submit a request to onboard my residential society.
+      tags:
+        - Society Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [society_name, address, admin_name, admin_contact]
+              properties:
+                society_name:
+                  type: string
+                  example: "Sunrise Horizon Residency"
+                address:
+                  type: string
+                  example: "456 Horizon Avenue, Block C"
+                admin_name:
+                  type: string
+                  example: "Alice Admin"
+                admin_contact:
+                  type: string
+                  example: "alice_admin@example.com"
+                resident_count:
+                  type: integer
+                  example: 60
+                initial_credits:
+                  type: integer
+                  example: 25
+                reason:
+                  type: string
+                  example: "To establish a modern time-credit exchange network."
+      responses:
+        '200':
+          description: Application submitted successfully
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  /api/v1/societies/applications:
+    get:
+      summary: List all pending society onboarding applications
+      description: |
+        **User Story Mapping (US-05):** As the Platform Owner, I want to review all pending society setup requests.
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of pending applications
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/societies/join:
+    post:
+      summary: Join an active society by invitation key and claim household unit
+      description: |
+        **User Story Mapping (US-06):** As a resident, I want to use my society key to select a household slot and submit ID proof.
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [society_key, unit_number, id_proof_url]
+              properties:
+                society_key:
+                  type: string
+                  example: "OASIS-2026"
+                unit_number:
+                  type: string
+                  example: "A-102"
+                id_proof_url:
+                  type: string
+                  example: "https://cen.app/uploads/id_proof_123.png"
+      responses:
+        '200':
+          description: Join request submitted successfully
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  # Marketplace APIs (Skill & Resource Exchange)
+  /api/v1/marketplace/skills:
+    get:
+      summary: Browse approved skill exchange listings
+      description: |
+        **User Story Mapping (US-07):** As a resident, I want to view available skills offered by neighbours.
+      tags:
+        - Marketplace
+      responses:
+        '200':
+          description: List of active skill offerings
+    post:
+      summary: Offer a new skill for time credits
+      description: |
+        **User Story Mapping (US-08):** As a resident, I want to post a skill I can offer to earn time credits.
+      tags:
+        - Marketplace
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title:
+                  type: string
+                  example: "Acoustic Guitar Lessons"
+                description:
+                  type: string
+                  example: "Beginner acoustic guitar chords and rhythm practice."
+                tags:
+                  type: string
+                  example: "music,guitar,lessons"
+      responses:
+        '200':
+          description: Skill listing created (pending coordinator approval)
+
+  /api/v1/marketplace/resources:
+    get:
+      summary: Browse shared community resources and tools
+      description: |
+        **User Story Mapping (US-09):** As a resident, I want to browse items shared by neighbours for borrowing.
+      tags:
+        - Marketplace
+      responses:
+        '200':
+          description: List of available shared resources
+    post:
+      summary: Share a physical item with the community
+      description: |
+        **User Story Mapping (US-10):** As a resident, I want to offer a tool or resource for temporary lending.
+      tags:
+        - Marketplace
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, description]
+              properties:
+                name:
+                  type: string
+                  example: "Cordless Drill Kit 18V"
+                description:
+                  type: string
+                  example: "18V drill with masonry bit set."
+                category:
+                  type: string
+                  example: "Tools"
+      responses:
+        '200':
+          description: Resource listing created
+
+  # Time-Credit Wallet APIs
+  /api/v1/wallet/balance:
+    get:
+      summary: Get user's current time-credit balance and transaction history
+      description: |
+        **User Story Mapping (US-11):** As a resident, I want to check my credit balance and recent earnings/transfers.
+      tags:
+        - Time Credit Wallet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Balance and transactions summary
+
+  /api/v1/wallet/transfer:
+    post:
+      summary: Transfer time credits to another resident
+      description: |
+        **User Story Mapping (US-12):** As a resident, I want to transfer time credits to a neighbor for completed services.
+      tags:
+        - Time Credit Wallet
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient_id, amount]
+              properties:
+                recipient_id:
+                  type: string
+                  example: "u-resident-2"
+                amount:
+                  type: number
+                  example: 2.5
+                description:
+                  type: string
+                  example: "Payment for 2.5h guitar lesson"
+      responses:
+        '200':
+          description: Transfer executed successfully
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  # AI & Smart Assistant APIs
+  /api/v1/ai/chatbot:
+    post:
+      summary: Query Gemini AI Smart Assistant
+      description: |
+        **User Story Mapping (US-13):** As a user, I want to ask questions to an AI assistant about rules, notices, or credits.
+      tags:
+        - AI & Smart Assistant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  example: "How do I earn time credits?"
+      responses:
+        '200':
+          description: AI response generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer:
+                    type: string
+                    example: "You can earn time credits by offering skills or volunteering for community events."
+
+  /api/v1/ai/auto-tag:
+    post:
+      summary: Auto-tag listing content using AI
+      description: |
+        **User Story Mapping (US-14):** As a content poster, I want AI to automatically extract relevant tags and category.
+      tags:
+        - AI & Smart Assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  example: "Acoustic guitar and music lessons for beginners"
+      responses:
+        '200':
+          description: Auto-tagging result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category:
+                    type: string
+                    example: "Music"
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                    example: ["guitar", "music", "education"]
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "u-123"
+        name:
+          type: string
+          example: "Alice Smith"
+        email:
+          type: string
+          example: "alice@example.com"
+        role:
+          type: string
+          example: "resident"
+        credit_balance:
+          type: number
+          example: 20.0
+
+  responses:
+    BadRequestError:
+      description: Bad request parameters or business logic failure
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Email already registered"
+
+    UnauthorizedError:
+      description: Missing or invalid JWT access token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Could not validate credentials"
+
+    ForbiddenError:
+      description: User lacks sufficient role permissions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Forbidden: Owner role required"
+
+    ValidationError:
+      description: Request payload validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Field required"

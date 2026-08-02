@@ -183,27 +183,41 @@ function AppLayout() {
               <Building className="h-6 w-6" />
             </div>
             <div className="space-y-2">
-              <CardTitle className="text-xl font-bold text-ink">Application Under Review</CardTitle>
+              <CardTitle className="text-xl font-bold text-ink">Application Pending Owner Approval</CardTitle>
               <CardDescription className="text-xs text-on-surface-variant leading-relaxed">
-                Your setup request for <span className="font-semibold text-ink">"{extraInfo?.societyName}"</span> is pending platform manager approval. The system administrator will verify the community location and details before activating your network.
+                Hi <span className="font-semibold text-ink">{user?.name}</span>, your setup request for <span className="font-semibold text-ink">"{extraInfo?.societyName}"</span> is currently pending platform owner verification and approval.
               </CardDescription>
             </div>
             <div className="bg-panel/40 border border-line/40 rounded-xl p-4 text-xs text-left space-y-2">
-              <div className="font-bold text-ink uppercase tracking-wider text-[10px]">Application details</div>
+              <div className="font-bold text-ink uppercase tracking-wider text-[10px]">Application Details</div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Society Name:</span><span className="font-semibold text-ink">{extraInfo?.societyName}</span></div>
               <div className="flex justify-between"><span className="text-on-surface-variant">Applicant:</span><span className="font-semibold text-ink">{extraInfo?.applicantName}</span></div>
-              <div className="flex justify-between"><span className="text-on-surface-variant">Contact:</span><span className="font-semibold text-ink">{extraInfo?.applicantContact}</span></div>
-              <div className="flex justify-between"><span className="text-on-surface-variant">Status:</span><Badge className="bg-amber-50 border border-amber-200 text-amber-800 uppercase text-[9px] font-bold tracking-wider pointer-events-none">Awaiting Owner</Badge></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Contact Email:</span><span className="font-semibold text-ink">{extraInfo?.applicantContact}</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Status:</span><Badge className="bg-amber-50 border border-amber-200 text-amber-800 uppercase text-[9px] font-bold tracking-wider pointer-events-none">Awaiting Owner Approval</Badge></div>
             </div>
             <p className="text-xs text-on-surface-variant/90 leading-normal">
-              You will gain access to the society coordinator management console immediately upon verification.
+              You will gain access to your society admin console immediately upon owner approval.
             </p>
-            <div className="pt-2">
+            <div className="flex flex-col gap-2 pt-2">
               <Button 
                 variant="outline" 
-                onClick={() => logout()}
-                className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold cursor-pointer active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                onClick={async () => {
+                  if (extraInfo) {
+                    await societyService.deleteApplication(extraInfo.id);
+                    toast.info("Society request cancelled.");
+                    checkStatus();
+                  }
+                }}
+                className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold cursor-pointer active:scale-98 transition-all"
               >
-                <LogOut className="h-4 w-4" /> Sign Out
+                Cancel Society Request
+              </Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => logout()}
+                className="w-full h-10 text-xs font-semibold hover:bg-rose-50 text-rose-600 cursor-pointer active:scale-98 transition-all"
+              >
+                <LogOut className="mr-1.5 h-4 w-4" /> Sign Out
               </Button>
             </div>
           </Card>

@@ -34,7 +34,7 @@ function Login() {
   const { redirect } = Route.useSearch();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("demo");
+  const [pw, setPw] = useState("password123");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +50,7 @@ function Login() {
 
   const quick = async (em: string) => {
     setEmail(em);
-    const u = await login(em, "demo");
+    const u = await login(em, "password123");
     if (u) {
       toast.success(`Demo Login: connected as ${u.role}`);
       if (redirect) {

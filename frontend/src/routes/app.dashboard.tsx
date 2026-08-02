@@ -206,6 +206,8 @@ function AdminDash() {
   const s = soc.data;
   const coordCount = coords.data?.length ?? 0;
   
+  const actualResidentCount = residents.data?.filter((u) => u.role !== "admin" && u.role !== "owner").length ?? 0;
+  
   return (
     <div className="space-y-6">
       {coordCount < 2 && (
@@ -228,7 +230,7 @@ function AdminDash() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat icon={Users} label="Total Residents" value={`${residents.data?.length ?? 0} / ${s?.capacity ?? "—"}`} trend={{ value: "Capacity status", type: "neutral" }} />
+        <Stat icon={Users} label="Total Residents" value={`${actualResidentCount} / ${s?.capacity ?? "—"}`} trend={{ value: "Capacity status", type: "neutral" }} />
         <Stat icon={CheckSquare} label="Coordinators" value={`${coordCount}/2`} hint="Minimum requirement" trend={{ value: coordCount >= 2 ? "Ready" : "Incomplete", type: coordCount >= 2 ? "up" : "down" }} />
         <Stat icon={Sparkles} label="Performance" value={`${s?.performanceScore ?? "—"}/100`} hint="Society health index" trend={{ value: "+2.5% MoM", type: "up" }} />
       </div>

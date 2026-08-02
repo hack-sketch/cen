@@ -4,9 +4,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { societyService } from "@/services";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -18,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { XCircle } from "lucide-react";
+import { Settings2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/owner/societies")({ component: Page });
@@ -51,14 +53,21 @@ function Page() {
                   <p className="text-xs text-on-surface-variant mt-1">{s.type} · {s.address}</p>
                 </div>
                 {s.status === "active" && (
-                  <Button variant="outline" className="h-[34px] text-xs font-semibold px-4 border-line-strong hover:bg-panel cursor-pointer flex-shrink-0" onClick={() => setConfirmSuspend({ id: s.id, name: s.name })}>Suspend</Button>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <EditConfigDialog society={s} onDone={() => qc.invalidateQueries({ queryKey: ["societies"] })} />
+                    <Button variant="outline" className="h-[34px] text-xs font-semibold px-4 border-line-strong hover:bg-panel cursor-pointer" onClick={() => setConfirmSuspend({ id: s.id, name: s.name })}>Suspend</Button>
+                  </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-4 mt-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-6 pt-4 mt-2">
                 <div>
-                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Capacity</span>
+                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Capacity Slots</span>
                   <p className="text-sm font-semibold text-ink mt-1">{s.capacity} Households</p>
+                </div>
+                <div>
+                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Initial Credits</span>
+                  <p className="text-sm font-semibold text-deep-forest mt-1">{s.initialCredits ?? 10} Credits / House</p>
                 </div>
                 <div>
                   <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Coordinators</span>
@@ -110,5 +119,55 @@ function Page() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function EditConfigDialog({ society, onDone }: { society: import("@/mocks/data").Society; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [cap, setCap] = useState<number | string>(society.capacity);
+  const [initCreds, setInitCreds] = useState<number | string>(society.initialCredits ?? 10);
+
+  useEffect(() => {
+    if (open) {
+      setCap(society.capacity);
+      setInitCreds(society.initialCredits ?? 10);
+    }
+  }, [open, society]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="h-[34px] text-xs font-semibold px-3 border-line-strong hover:bg-panel cursor-pointer gap-1.5">
+          <Settings2 className="h-3.5 w-3.5 text-on-surface-variant" />
+          Edit Parameters
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md border-line/60 rounded-2xl p-6">
+        <DialogHeader className="pb-3 border-b border-line/35">
+          <DialogTitle className="text-base font-bold text-ink">Edit {society.name} Parameters</DialogTitle>
+          <span className="text-xs text-on-surface-variant">Update member slots capacity and default initial credits for newly joining households.</span>
+        </DialogHeader>
+        <div className="space-y-4 pt-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Total Slots Capacity</Label>
+            <Input type="number" min={1} value={cap} onChange={(e) => setCap(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong text-xs h-10 rounded-lg" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Initial Credits per House / Slot</Label>
+            <Input type="number" min={0} value={initCreds} onChange={(e) => setInitCreds(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong text-xs h-10 rounded-lg" />
+            <p className="text-[10px] text-on-surface-variant">Newly approved members will receive this credit amount when onboarded.</p>
+          </div>
+          <Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer mt-2 active:scale-98 transition-all" onClick={async () => {
+            await societyService.updateSocietyConfig(society.id, {
+              capacity: Number(cap) || society.capacity,
+              initialCredits: Number(initCreds) || 10,
+            });
+            toast.success("Society parameters updated successfully");
+            setOpen(false);
+            onDone();
+          }}>Save Configuration</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

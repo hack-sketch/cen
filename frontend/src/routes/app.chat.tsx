@@ -144,13 +144,15 @@ function ChatbotView() {
   const send = async () => {
     if (!input.trim()) return;
     const q = input;
+    const historySnapshot = msgs;
     setMsgs((m) => [...m, { from: "me", text: q }]);
     setInput(""); 
     setLoading(true);
-    const r = await chatbotQuery(q, user!.id);
+    const r = await chatbotQuery(q, user!.id, historySnapshot);
     setMsgs((m) => [...m, { from: "bot", text: r }]);
     setLoading(false);
   };
+
 
   return (
     <Card className="flex h-[74vh] flex-col border-line/60 shadow-sm bg-white overflow-hidden">

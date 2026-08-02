@@ -45,6 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = await authService.login(email, password);
     if (u) {
       setUser(u);
+      setViewModeState("coordinator");
+      localStorage.removeItem(VIEW_KEY);
       localStorage.setItem(STORAGE_KEY, u.id);
     }
     return u;
@@ -53,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(VIEW_KEY);
+    authService.logout();
   };
 
   const setUserById: AuthCtx["setUserById"] = async (id) => {

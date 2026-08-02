@@ -32,17 +32,19 @@ function Signup() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (form.password !== form.confirm) return toast.error("Passwords do not match");
-    const u = await authService.signup(form.name, form.email);
-    if (u) {
-      await setUserById(u.id);
-      toast.success("Account created — now claim your household or request a society");
-      if (redirect) {
-        nav({ to: redirect });
-      } else {
-        nav({ to: "/app/dashboard" });
+    try {
+      const u = await authService.signup(form.name, form.email, form.password);
+      if (u) {
+        await setUserById(u.id);
+        toast.success("Account created — now claim your household or request a society");
+        if (redirect) {
+          nav({ to: redirect });
+        } else {
+          nav({ to: "/app/dashboard" });
+        }
       }
-    } else {
-      toast.error("Signup failed");
+    } catch (err: any) {
+      toast.error(err.message || "Signup failed");
     }
   };
 

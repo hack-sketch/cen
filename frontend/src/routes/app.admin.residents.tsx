@@ -14,10 +14,10 @@ function Page() {
   const { user } = useAuth();
   const [q, setQ] = useState("");
   const list = useQuery({ queryKey: ["allRes", user!.societyId], queryFn: () => userService.listBySociety(user!.societyId!) });
-  const rows = list.data?.filter((u) => u.name.toLowerCase().includes(q.toLowerCase())) ?? [];
+  const rows = list.data?.filter((u) => u.role !== "admin" && u.role !== "owner" && u.name.toLowerCase().includes(q.toLowerCase())) ?? [];
   return (
     <div>
-      <PageHeader title="Residents" description="Read-only roster." />
+      <PageHeader title="Residents" description="Read-only resident directory." />
       <Input placeholder="Search residents…" value={q} onChange={(e) => setQ(e.target.value)} className="mb-4 max-w-sm" />
       <Card>
         <CardContent className="p-0">
@@ -37,8 +37,8 @@ function Page() {
                     <td className="p-3 font-medium whitespace-nowrap">{r.name}</td>
                     <td className="p-3 text-muted-foreground whitespace-nowrap">{r.householdId ?? "—"}</td>
                     <td className="p-3 whitespace-nowrap">
-                      <Badge variant={r.isCoordinator ? "default" : "secondary"}>
-                        {r.isCoordinator ? "Coordinator" : "Resident"}
+                      <Badge variant={r.role === "admin" ? "outline" : r.isCoordinator || r.role === "coordinator" ? "default" : "secondary"}>
+                        {r.role === "admin" ? "Admin" : r.isCoordinator || r.role === "coordinator" ? "Coordinator" : "Resident"}
                       </Badge>
                     </td>
                     <td className="p-3 text-right whitespace-nowrap font-semibold">{r.creditBalance}</td>

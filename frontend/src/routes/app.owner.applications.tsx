@@ -52,13 +52,13 @@ function Page() {
                 </div>
                 {a.status === "pending" && (
                   <div className="flex gap-2 flex-shrink-0">
-                    <ApproveDialog id={a.id} initialCapacity={a.residentCount} onDone={() => qc.invalidateQueries({ queryKey: ["apps"] })} />
+                    <ApproveDialog id={a.id} initialCapacity={a.residentCount} suggestedInitialCredits={a.initialCredits} onDone={() => qc.invalidateQueries({ queryKey: ["apps"] })} />
                     <Button variant="outline" className="h-[36px] text-xs font-semibold px-4 active:scale-98 transition-all border-line-strong hover:bg-panel cursor-pointer" onClick={() => setConfirmReject({ id: a.id, societyName: a.societyName })}>Reject</Button>
                   </div>
                 )}
               </div>
 
-              <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 pt-4 mt-2">
+              <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-6 pt-4 mt-2">
                 <div>
                   <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Applicant Info</span>
                   <p className="text-sm font-semibold text-ink mt-1">{a.applicantName}</p>
@@ -70,11 +70,16 @@ function Page() {
                   <p className="text-xs text-on-surface-variant mt-0.5">{a.type}</p>
                 </div>
                 <div>
-                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Residents Count</span>
-                  <p className="text-sm font-bold text-deep-forest mt-1">{a.residentCount ?? "N/A"}</p>
-                  <p className="text-xs text-on-surface-variant mt-0.5">Estimated capacity</p>
+                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Requested Slots</span>
+                  <p className="text-sm font-bold text-deep-forest mt-1">{a.residentCount ?? "100"}</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Household capacity</p>
                 </div>
-                <div className="sm:col-span-2 md:col-span-1">
+                <div>
+                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Initial Credits</span>
+                  <p className="text-sm font-bold text-deep-forest mt-1">{a.initialCredits ?? 10} Credits</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Per house grant</p>
+                </div>
+                <div>
                   <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Proposal Reason</span>
                   <p className="text-sm text-ink leading-relaxed italic mt-1 pr-2">"{a.reason}"</p>
                 </div>
@@ -119,15 +124,28 @@ function Page() {
   );
 }
 
-function ApproveDialog({ id, initialCapacity = 200, onDone }: { id: string; initialCapacity?: number; onDone: () => void }) {
+function ApproveDialog({
+  id,
+  initialCapacity = 200,
+  suggestedInitialCredits = 10,
+  onDone,
+}: {
+  id: string;
+  initialCapacity?: number;
+  suggestedInitialCredits?: number;
+  onDone: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [cap, setCap] = useState<number | string>(initialCapacity);
+  const [initCredits, setInitCredits] = useState<number | string>(suggestedInitialCredits);
 
   useEffect(() => {
     if (open) {
       setCap(initialCapacity);
+      setInitCredits(suggestedInitialCredits);
     }
-  }, [open, initialCapacity]);
+  }, [open, initialCapacity, suggestedInitialCredits]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -136,16 +154,21 @@ function ApproveDialog({ id, initialCapacity = 200, onDone }: { id: string; init
       <DialogContent className="sm:max-w-md border-line/60 rounded-2xl p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
         <DialogHeader className="pb-3 border-b border-line/35">
           <DialogTitle className="text-base font-bold text-ink">Approve society</DialogTitle>
-          <span className="text-xs text-on-surface-variant">Initialize community boundaries and allocate maximum member capacity.</span>
+          <span className="text-xs text-on-surface-variant">Initialize community parameters including member slot capacity and initial credits per household.</span>
         </DialogHeader>
         <div className="space-y-4 pt-4">
           <div className="space-y-1.5">
-            <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Maximum member capacity</Label>
-            <Input type="number" value={cap} onChange={(e) => setCap(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg" />
+            <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Maximum member capacity (Slots)</Label>
+            <Input type="number" min={1} value={cap} onChange={(e) => setCap(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Initial credits per household / slot</Label>
+            <Input type="number" min={0} value={initCredits} onChange={(e) => setInitCredits(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg" />
+            <p className="text-[10px] text-on-surface-variant">Every household approved to join this society will automatically receive these credits.</p>
           </div>
           <Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer mt-2 active:scale-98 transition-all" onClick={async () => {
-            await societyService.approveApplication(id, Number(cap) || 200);
-            toast.success("Society approved and activated");
+            await societyService.approveApplication(id, Number(cap) || 200, Number(initCredits) || 10);
+            toast.success("Society approved and activated with configured initial credits");
             setOpen(false);
             onDone();
           }}>Confirm approval</Button>

@@ -197,6 +197,7 @@ function JoinFlow({ society, step, setStep, onBack }: {
   const [chosen, setChosen] = useState<Household | null>(null);
   const [form, setForm] = useState({ name: user?.name || "", contact: user?.email || "" });
   const [file, setFile] = useState<string>("");
+  const [fileDataUrl, setFileDataUrl] = useState<string>("");
 
   // Responsive pagination state
   const [isSmallScreen, setIsSmallScreen] = useState(false);
@@ -294,26 +295,84 @@ function JoinFlow({ society, step, setStep, onBack }: {
             </div>
           )}
           {step === 3 && (
-            <div className="space-y-3">
-              <Label>Upload ID Proof</Label>
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed p-8 text-sm text-muted-foreground hover:bg-muted/40">
-                <Upload className="h-4 w-4" />
-                {file ? `Selected: ${file}` : "Click to upload file"}
-                <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0]?.name ?? "")} />
-              </label>
-              <p className="text-xs text-muted-foreground">Any government-issued ID. Kept confidential.</p>
-              <Button className="w-full" disabled={!file} onClick={async () => {
-                // TODO: replace with real API call to backend
-                await joinRequestService.submit({
-                  userId: user!.id,
-                  userName: form.name,
-                  societyId: society.id,
-                  householdId: chosen!.id,
-                  unitNumber: chosen!.unitNumber,
-                  idProofUrl: `mock://${file}`,
-                });
-                setStep(4);
-              }}>Submit</Button>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-ink">Upload Government ID Proof</Label>
+                <p className="text-[11px] text-on-surface-variant">Select an image of your Aadhaar, Passport, or Driving License. Kept 100% confidential.</p>
+              </div>
+
+              {fileDataUrl ? (
+                <div className="space-y-3">
+                  <div className="border border-line rounded-xl bg-panel/30 p-3 flex flex-col items-center justify-center shadow-inner h-52 overflow-hidden relative">
+                    <img src={fileDataUrl} alt="ID Proof Preview" className="max-h-48 w-full object-contain rounded-lg shadow-sm border bg-white" />
+                  </div>
+                  <div className="flex justify-between items-center text-xs px-1">
+                    <span className="font-semibold text-ink truncate max-w-[220px]">{file}</span>
+                    <label className="text-deep-forest font-bold hover:underline cursor-pointer">
+                      Change Photo
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        className="hidden" 
+                        onChange={(e) => {
+                          const selected = e.target.files?.[0];
+                          if (selected) {
+                            setFile(selected.name);
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              if (typeof reader.result === "string") {
+                                setFileDataUrl(reader.result);
+                              }
+                            };
+                            reader.readAsDataURL(selected);
+                          }
+                        }} 
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex flex-col cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line-strong/60 p-8 text-sm text-muted-foreground hover:bg-muted/40 hover:border-deep-forest/50 transition-all">
+                  <Upload className="h-6 w-6 text-deep-forest" />
+                  <span className="font-semibold text-ink text-xs">{file ? `Selected: ${file}` : "Click to select ID image"}</span>
+                  <span className="text-[10px] text-on-surface-variant">PNG, JPG, JPEG or WebP image formats</span>
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    className="hidden" 
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0];
+                      if (selected) {
+                        setFile(selected.name);
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          if (typeof reader.result === "string") {
+                            setFileDataUrl(reader.result);
+                          }
+                        };
+                        reader.readAsDataURL(selected);
+                      }
+                    }} 
+                  />
+                </label>
+              )}
+
+              <Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer active:scale-98 transition-all" disabled={!file} onClick={async () => {
+                try {
+                  await joinRequestService.submit({
+                    userId: user!.id,
+                    userName: form.name || user!.name,
+                    societyId: society.id,
+                    householdId: chosen!.id,
+                    unitNumber: chosen!.unitNumber,
+                    idProofUrl: fileDataUrl || `mock://${file}`,
+                  });
+                  toast.success("Join request submitted successfully!");
+                  setStep(4);
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to submit join request");
+                }
+              }}>Submit Join Request</Button>
             </div>
           )}
           {step === 4 && (

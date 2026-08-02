@@ -255,10 +255,7 @@ const resourceFormSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters").max(100, "Name is too long"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.string().min(1, "Category is required"),
-  credits: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
-    z.number({ invalid_type_error: "Credits must be a number" }).min(1, "Credits must be at least 1")
-  ),
+  credits: z.coerce.number().min(1, "Credits must be at least 1"),
 });
 
 type ResourceFormValues = z.infer<typeof resourceFormSchema>;

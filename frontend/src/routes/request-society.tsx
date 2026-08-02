@@ -30,7 +30,10 @@ function RequestSociety() {
     applicantContact: "",
     reason: "",
     residentCount: 100,
+    initialCredits: 10,
   });
+
+  const [existingApp, setExistingApp] = useState<any>(null);
 
   useEffect(() => {
     if (user) {
@@ -40,6 +43,11 @@ function RequestSociety() {
         applicantContact: user.email,
       }));
       setShowSurvey(!user.hasCompletedSurvey);
+      societyService.getApplicationByEmail(user.email).then((sa) => {
+        if (sa && sa.status === "pending") {
+          setExistingApp(sa);
+        }
+      });
     }
   }, [user]);
 
@@ -50,11 +58,19 @@ function RequestSociety() {
     e.preventDefault();
     const finalForm = {
       ...form,
+      applicantName: user?.name || form.applicantName || "Applicant",
+      applicantContact: user?.email || form.applicantContact || "contact@cen.app",
+      reason: form.reason || "Request to setup society network",
       residentCount: Number(form.residentCount) || 100,
+      initialCredits: Number(form.initialCredits) || 10,
     };
-    await societyService.submitApplication(finalForm);
-    toast.success("Application submitted for owner review");
-    setSubmitted(true);
+    try {
+      await societyService.submitApplication(finalForm);
+      toast.success("Application submitted for owner review");
+      setSubmitted(true);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to submit application");
+    }
   };
 
   if (loading) {
@@ -115,6 +131,45 @@ function RequestSociety() {
 
   if (showSurvey) {
     return <OnboardingSurveyModal user={user} onComplete={() => setShowSurvey(false)} buttonText="Continue" />;
+  }
+
+  if (existingApp) {
+    return (
+      <div className="mx-auto grid min-h-screen max-w-lg place-items-center p-6 font-body">
+        <Card className="w-full border-line/60 shadow-xl bg-white p-6 text-center space-y-5">
+          <div className="w-12 h-12 rounded-full bg-soft-violet/10 flex items-center justify-center mx-auto text-soft-violet animate-pulse">
+            <Building className="h-6 w-6" />
+          </div>
+          <div className="space-y-2">
+            <CardTitle className="text-xl font-bold text-ink">Application Pending Owner Approval</CardTitle>
+            <CardDescription className="text-xs text-on-surface-variant leading-relaxed">
+              Hi <span className="font-semibold text-ink">{user?.name}</span>, your setup request for <span className="font-semibold text-ink">"{existingApp.societyName}"</span> is currently pending platform owner verification and approval.
+            </CardDescription>
+          </div>
+          <div className="bg-panel/40 border border-line/40 rounded-xl p-4 text-xs text-left space-y-2">
+            <div className="font-bold text-ink uppercase tracking-wider text-[10px]">Application Details</div>
+            <div className="flex justify-between"><span className="text-on-surface-variant">Society Name:</span><span className="font-semibold text-ink">{existingApp.societyName}</span></div>
+            <div className="flex justify-between"><span className="text-on-surface-variant">Applicant:</span><span className="font-semibold text-ink">{existingApp.applicantName}</span></div>
+            <div className="flex justify-between"><span className="text-on-surface-variant">Contact:</span><span className="font-semibold text-ink">{existingApp.applicantContact}</span></div>
+            <div className="flex justify-between"><span className="text-on-surface-variant">Status:</span><span className="font-bold text-amber-800 uppercase text-[10px]">Awaiting Owner Approval</span></div>
+          </div>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                await societyService.deleteApplication(existingApp.id);
+                toast.info("Society application cancelled.");
+                setExistingApp(null);
+              }}
+              className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold cursor-pointer active:scale-98 transition-all"
+            >
+              Cancel Request
+            </Button>
+            <Button onClick={() => navigate({ to: "/app/dashboard" })} className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg active:scale-98 transition-all">Go to Console Dashboard</Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   if (submitted) {
@@ -180,9 +235,15 @@ function RequestSociety() {
                 <Input id="ac" required value={form.applicantContact} onChange={(e) => upd("applicantContact", e.target.value)} />
               </div>
             </div>
-            <div>
-              <Label htmlFor="rc">Estimated Number of Residents</Label>
-              <Input id="rc" type="number" required min={1} value={form.residentCount} onChange={(e) => upd("residentCount", e.target.value === "" ? "" as any : Number(e.target.value))} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="rc">Suggested Total Slots (Households)</Label>
+                <Input id="rc" type="number" required min={1} value={form.residentCount} onChange={(e) => upd("residentCount", e.target.value === "" ? "" as any : Number(e.target.value))} />
+              </div>
+              <div>
+                <Label htmlFor="ic">Suggested Initial Credits per Slot</Label>
+                <Input id="ic" type="number" required min={0} value={form.initialCredits} onChange={(e) => upd("initialCredits", e.target.value === "" ? "" as any : Number(e.target.value))} />
+              </div>
             </div>
             <div>
               <Label htmlFor="rs">Why do you want CEN?</Label>

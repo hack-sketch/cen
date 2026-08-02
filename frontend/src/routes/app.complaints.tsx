@@ -42,7 +42,7 @@ function Page() {
                     <Badge variant="outline" className="text-xs border-line font-medium text-on-surface-variant bg-panel/30 uppercase px-2 py-0.5">{c.category}</Badge>
                     <Badge className={cn(
                       "text-xs uppercase font-bold border px-2 py-0.5",
-                      c.status === "pending" ? "bg-amber-50 border-amber-200 text-amber-800" :
+                      c.status === "open" ? "bg-amber-50 border-amber-200 text-amber-800" :
                       c.status === "in-review" ? "bg-blue-50 border-blue-200 text-blue-800" :
                       "bg-emerald-50 border-emerald-200 text-emerald-800"
                     )}>

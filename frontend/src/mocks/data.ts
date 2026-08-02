@@ -34,6 +34,7 @@ export interface Society {
   longitude: number;
   adminId: string;
   capacity: number;
+  initialCredits: number;
   householdRangeStart: number;
   householdRangeEnd: number;
   coordinatorCount: number;
@@ -61,6 +62,7 @@ export interface SocietyApplication {
   status: "pending" | "approved" | "rejected";
   submittedAt: string;
   residentCount?: number;
+  initialCredits?: number;
 }
 
 export interface JoinRequest {
@@ -115,6 +117,8 @@ export interface EventItem {
   title: string;
   description: string;
   date: string;
+  time?: string;
+  location?: string;
   createdByCoordinatorId: string;
   volunteersNeeded: number;
   volunteers: string[];
@@ -139,6 +143,7 @@ export interface Complaint {
   filedByName: string;
   involvedUserIds: string[];
   subject: string;
+  title?: string;
   description: string;
   category: string;
   priority?: "low" | "medium" | "high";
@@ -157,6 +162,7 @@ export interface Notice {
   posterRole: Role;
   title: string;
   content: string;
+  category?: string;
   date: string;
   societyId: string;
 }
@@ -185,6 +191,7 @@ export const societies: Society[] = [
     longitude: 77.58,
     adminId: "u-freshadmin",
     capacity: 150,
+    initialCredits: 10,
     householdRangeStart: 1,
     householdRangeEnd: 150,
     coordinatorCount: 0,
@@ -193,7 +200,7 @@ export const societies: Society[] = [
     key: "FRESH-VISTA",
   },
   {
-    id: "soc-1",
+    id: "soc-demo",
     name: "Green Meadows Residency",
     type: "Residential Apartment",
     address: "12 Park Ave, Bengaluru",
@@ -201,6 +208,7 @@ export const societies: Society[] = [
     longitude: 77.59,
     adminId: "u-admin",
     capacity: 200,
+    initialCredits: 15,
     householdRangeStart: 101,
     householdRangeEnd: 320,
     coordinatorCount: 2,
@@ -217,6 +225,7 @@ export const societies: Society[] = [
     longitude: 77.6,
     adminId: "u-admin2",
     capacity: 120,
+    initialCredits: 10,
     householdRangeStart: 1,
     householdRangeEnd: 120,
     coordinatorCount: 3,
@@ -233,6 +242,7 @@ export const societies: Society[] = [
     longitude: 77.62,
     adminId: "u-admin3",
     capacity: 80,
+    initialCredits: 20,
     householdRangeStart: 1,
     householdRangeEnd: 80,
     coordinatorCount: 1,
@@ -273,7 +283,7 @@ export const users: User[] = [
     name: "Ravi Admin",
     email: "admin@cen.app",
     role: "admin",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     creditBalance: 0,
     joinedDate: "2024-02-10",
     idProofUploaded: true,
@@ -286,7 +296,7 @@ export const users: User[] = [
     name: "Meera Coordinator",
     email: "coord@cen.app",
     role: "coordinator",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-101",
     creditBalance: 42,
     joinedDate: "2024-03-01",
@@ -300,7 +310,7 @@ export const users: User[] = [
     name: "Arjun Coordinator",
     email: "coord2@cen.app",
     role: "coordinator",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-102",
     creditBalance: 30,
     joinedDate: "2024-03-05",
@@ -314,7 +324,7 @@ export const users: User[] = [
     name: "Anaya Resident",
     email: "resident@cen.app",
     role: "resident",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-103",
     creditBalance: 25,
     joinedDate: "2024-04-12",
@@ -328,7 +338,7 @@ export const users: User[] = [
     name: "Karan Resident",
     email: "karan@cen.app",
     role: "resident",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-104",
     creditBalance: 15,
     joinedDate: "2024-05-01",
@@ -342,7 +352,7 @@ export const users: User[] = [
     name: "Sana Resident",
     email: "sana@cen.app",
     role: "resident",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-105",
     creditBalance: 50,
     joinedDate: "2024-05-15",
@@ -364,7 +374,7 @@ export const households: Household[] = Array.from({ length: 20 }, (_, i) => {
   };
   return {
     id: `h-${unit}`,
-    societyId: "soc-1",
+    societyId: "soc-demo",
     unitNumber: `A-${unit}`,
     claimed: !!claimedIdx[unit],
     claimedByUserId: claimedIdx[unit],
@@ -383,6 +393,7 @@ export const societyApplications: SocietyApplication[] = [
     status: "pending",
     submittedAt: "2026-06-20",
     residentCount: 150,
+    initialCredits: 10,
   },
   {
     id: "app-2",
@@ -395,6 +406,7 @@ export const societyApplications: SocietyApplication[] = [
     status: "pending",
     submittedAt: "2026-07-01",
     residentCount: 80,
+    initialCredits: 15,
   },
 ];
 
@@ -403,7 +415,7 @@ export const joinRequests: JoinRequest[] = [
     id: "jr-1",
     userId: "u-newres",
     userName: "Rohit Sharma",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-106",
     unitNumber: "A-106",
     idProofUrl: "mock://id-proof-1.pdf",
@@ -414,7 +426,7 @@ export const joinRequests: JoinRequest[] = [
     id: "jr-2",
     userId: "u-newres2",
     userName: "Divya Patel",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     householdId: "h-107",
     unitNumber: "A-107",
     idProofUrl: "mock://id-proof-2.pdf",
@@ -434,7 +446,7 @@ export const skills: Skill[] = [
     description: "10 years fixing bikes. Full tune-up, brake adjustment, flat fixes.",
     status: "approved",
     tags: ["bike", "repair", "cycling"],
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "sk-2",
@@ -446,7 +458,7 @@ export const skills: Skill[] = [
     description: "One-hour sessions covering algebra, geometry, and basic calculus.",
     status: "approved",
     tags: ["math", "tutoring", "education"],
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "sk-3",
@@ -458,7 +470,7 @@ export const skills: Skill[] = [
     description: "Gentle yoga sessions suitable for beginners and seniors.",
     status: "approved",
     tags: ["yoga", "wellness", "fitness"],
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "sk-4",
@@ -470,7 +482,7 @@ export const skills: Skill[] = [
     description: "Leaky taps, blocked drains, minor pipe fixes.",
     status: "pending",
     tags: ["plumbing", "repair"],
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "sk-5",
@@ -482,7 +494,7 @@ export const skills: Skill[] = [
     description: "Learn chords and simple songs. Bring your own guitar.",
     status: "pending",
     tags: ["guitar", "music", "lessons"],
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
 ];
 
@@ -497,7 +509,7 @@ export const resources: Resource[] = [
     credits: 6,
     status: "approved",
     description: "Good for photoshoots. Includes 50mm lens.",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "r-2",
@@ -509,7 +521,7 @@ export const resources: Resource[] = [
     credits: 2,
     status: "approved",
     description: "Cordless drill with full bit set.",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "r-3",
@@ -521,7 +533,7 @@ export const resources: Resource[] = [
     credits: 5,
     status: "approved",
     description: "1080p projector — great for movie nights.",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "r-4",
@@ -533,7 +545,7 @@ export const resources: Resource[] = [
     credits: 4,
     status: "pending",
     description: "Waterproof tent, easy setup.",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
 ];
 
@@ -555,7 +567,7 @@ export const events: EventItem[] = [
     volunteersNeeded: 8,
     volunteers: ["u-res2"],
     status: "upcoming",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "ev-2",
@@ -566,7 +578,7 @@ export const events: EventItem[] = [
     volunteersNeeded: 4,
     volunteers: [],
     status: "upcoming",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "ev-3",
@@ -577,7 +589,7 @@ export const events: EventItem[] = [
     volunteersNeeded: 6,
     volunteers: ["u-res", "u-res3"],
     status: "upcoming",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
 ];
 
@@ -615,7 +627,7 @@ export const complaints: Complaint[] = [
     status: "open",
     isAgainstCoordinator: false,
     assignedCoordinatorId: "u-coord",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     createdAt: "2026-07-08",
   },
   {
@@ -630,7 +642,7 @@ export const complaints: Complaint[] = [
     status: "in-review",
     isAgainstCoordinator: false,
     assignedCoordinatorId: "u-coord2",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     createdAt: "2026-07-11",
   },
   // Private (against coordinator) — visible only to admin
@@ -646,7 +658,7 @@ export const complaints: Complaint[] = [
     status: "open",
     isAgainstCoordinator: true,
     targetCoordinatorId: "u-coord",
-    societyId: "soc-1",
+    societyId: "soc-demo",
     createdAt: "2026-07-14",
   },
 ];
@@ -661,7 +673,7 @@ export const notices: Notice[] = [
     content:
       "Water supply will be interrupted from 9am to 2pm on Saturday for scheduled cleaning of the main storage tanks. Please store enough water in advance. Regular supply will resume by evening. Thank you for your cooperation and patience during this maintenance activity.",
     date: "2026-07-15",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "n-2",
@@ -671,7 +683,7 @@ export const notices: Notice[] = [
     title: "Yoga class location changed",
     content: "This week's yoga class moves to the terrace.",
     date: "2026-07-16",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
   {
     id: "n-3",
@@ -681,7 +693,7 @@ export const notices: Notice[] = [
     title: "Lost keys near lobby",
     content: "Found a set of keys near the lobby. Please contact me at A-103.",
     date: "2026-07-17",
-    societyId: "soc-1",
+    societyId: "soc-demo",
   },
 ];
 

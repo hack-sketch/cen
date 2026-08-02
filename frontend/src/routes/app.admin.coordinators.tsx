@@ -30,8 +30,8 @@ function Page() {
   const all = useQuery({ queryKey: ["allRes", sid], queryFn: () => userService.listBySociety(sid) });
   const [sel, setSel] = useState<string>("");
   const [confirmDemote, setConfirmDemote] = useState<{ id: string; name: string } | null>(null);
-  const coords = all.data?.filter((u) => u.isCoordinator) ?? [];
-  const residents = all.data?.filter((u) => !u.isCoordinator) ?? [];
+  const coords = all.data?.filter((u) => u.isCoordinator && u.role !== "admin" && u.role !== "owner") ?? [];
+  const residents = all.data?.filter((u) => !u.isCoordinator && u.role !== "admin" && u.role !== "owner") ?? [];
 
   return (
     <div>

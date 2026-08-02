@@ -24,7 +24,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, FileCheck, Sparkles, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import aadharImg from "@/assets/aadhar.webp";
+
 
 export const Route = createFileRoute("/app/admin/onboarding")({ component: Page });
 
@@ -87,27 +87,38 @@ function Households({ sid }: { sid: string }) {
     if (rangeSize <= 0) {
       return toast.error("Invalid range limits specified.");
     }
-    if (remainingSlots <= 2) {
-      return toast.warning("Bulk range generation is only available when you have more than 2 slots remaining.");
-    }
-    if (currentCount + rangeSize > capacity) {
-      return toast.error(`Adding ${rangeSize} units exceeds the society's capacity of ${capacity} (current count: ${currentCount}, remaining slots: ${remainingSlots}).`);
+    if (remainingSlots <= 0) {
+      return toast.warning("No remaining slots available in this society.");
     }
 
-    const blocks = blockInput.trim() ? [blockInput.trim()] : [""];
-    
-    await householdService.bulkGenerate(sid, blocks, startNum, endNum, formatPattern);
-    toast.success("Households generated successfully!");
-    qc.invalidateQueries({ queryKey: ["hh", sid] });
+    const blocks = blockInput
+      .split(",")
+      .map((b) => b.trim())
+      .filter(Boolean);
+    const blockList = blocks.length > 0 ? blocks : [""];
+    const totalNew = rangeSize * blockList.length;
+
+    if (currentCount + totalNew > capacity) {
+      return toast.error(`Adding ${totalNew} units exceeds the society's capacity of ${capacity} (current count: ${currentCount}, remaining slots: ${remainingSlots}).`);
+    }
+
+    try {
+      await householdService.bulkGenerate(sid, blockList, startNum, endNum, formatPattern);
+      toast.success("Households generated successfully!");
+      setBulkOpen(false);
+      qc.invalidateQueries({ queryKey: ["hh", sid] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate households");
+    }
   };
 
   const handleManualAdd = async () => {
-    if (!unit) return;
+    if (!unit.trim()) return;
     if (currentCount + 1 > capacity) {
       return toast.error(`Cannot add household. Maximum capacity of ${capacity} units has been reached.`);
     }
     try {
-      await householdService.register(sid, unit);
+      await householdService.register(sid, unit.trim());
       setUnit("");
       qc.invalidateQueries({ queryKey: ["hh", sid] });
       toast.success("Household unit added manually");
@@ -290,7 +301,7 @@ function Households({ sid }: { sid: string }) {
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">
 
-                {remainingSlots > 2 && (
+                {remainingSlots > 0 && (
                   <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
                     <DialogTrigger asChild>
                       <Button 
@@ -563,6 +574,8 @@ function Households({ sid }: { sid: string }) {
 function Requests({ sid }: { sid: string }) {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ["jr", sid], queryFn: () => joinRequestService.listBySociety(sid) });
+  const socQuery = useQuery({ queryKey: ["society", sid], queryFn: () => societyService.getById(sid) });
+  const initCredits = socQuery.data?.initialCredits ?? 10;
   const [selectedRequest, setSelectedRequest] = useState<import("@/mocks/data").JoinRequest | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] = useState<Record<string, { address: string; matched: boolean; score: string }>>({});
@@ -626,98 +639,103 @@ function Requests({ sid }: { sid: string }) {
         </Card>
       ))}
 
-      {/* Premium Verification Overlay Modal */}
+      {/* Manual Inspection Overlay Modal */}
       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)}>
         <DialogContent className="sm:max-w-2xl border-line/60 shadow-2xl rounded-2xl p-6">
           <DialogHeader className="pb-3 border-b border-line/45">
             <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
               <FileCheck className="h-5 w-5 text-deep-forest" />
-              ID Document Verification
+              Identity Proof Manual Inspection
             </DialogTitle>
             <DialogDescription className="text-xs text-on-surface-variant mt-1">
-              Review submitted identity card details for {selectedRequest?.userName} (Unit {selectedRequest?.unitNumber}).
+              Review submitted identity document for {selectedRequest?.userName} (Unit {selectedRequest?.unitNumber}).
             </DialogDescription>
           </DialogHeader>
 
-          {selectedRequest && (
-            <div className="grid md:grid-cols-2 gap-6 mt-4 pt-1">
-              {/* Document Image section */}
-              <div className="space-y-2.5">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">Submitted ID Card Document</span>
-                <div className="border border-line rounded-xl bg-panel/30 p-3 flex items-center justify-center shadow-inner h-52 overflow-hidden">
-                  <img src={aadharImg} alt="Aadhar Card" className="max-h-48 object-contain rounded-lg shadow-sm border bg-white" />
+          {selectedRequest && (() => {
+            const isImage = selectedRequest.idProofUrl && (
+              selectedRequest.idProofUrl.startsWith("data:") || 
+              selectedRequest.idProofUrl.startsWith("http") || 
+              selectedRequest.idProofUrl.startsWith("blob:")
+            );
+            const filename = selectedRequest.idProofUrl ? selectedRequest.idProofUrl.replace(/^mock:\/\//, "") : "Submitted_ID_Proof.pdf";
+
+            return (
+              <div className="grid md:grid-cols-2 gap-6 mt-4 pt-1">
+                {/* Document Image section */}
+                <div className="space-y-2.5">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">Submitted Document Image</span>
+                  <div className="border border-line rounded-xl bg-panel/30 p-3 flex flex-col items-center justify-center shadow-inner h-56 overflow-hidden relative">
+                    {isImage ? (
+                      <img src={selectedRequest.idProofUrl} alt="Uploaded ID Proof" className="max-h-52 w-full object-contain rounded-lg shadow-sm border bg-white" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-center p-4 bg-white rounded-xl border border-line shadow-sm w-full max-w-xs">
+                        <FileCheck className="h-10 w-10 text-deep-forest" />
+                        <span className="text-xs font-bold text-ink truncate max-w-[200px]">{filename}</span>
+                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px]">Direct Resident Upload</Badge>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Manual Review Details & Action Panel */}
+                <div className="space-y-3.5 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">
+                      Applicant Details
+                    </span>
+
+                    <div className="p-3.5 rounded-xl border border-line/60 bg-slate-50/50 space-y-2 text-xs">
+                      <div className="flex justify-between items-center pb-2 border-b border-line/35">
+                        <span className="text-on-surface-variant font-medium">Resident Name:</span>
+                        <span className="font-bold text-ink">{selectedRequest.userName}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b border-line/35">
+                        <span className="text-on-surface-variant font-medium">Requested Household:</span>
+                        <span className="font-bold text-deep-forest">Unit {selectedRequest.unitNumber}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b border-line/35">
+                        <span className="text-on-surface-variant font-medium">Submitted Date:</span>
+                        <span className="font-semibold text-ink">{selectedRequest.submittedAt}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-on-surface-variant font-medium">Current Status:</span>
+                        <Badge className="bg-amber-50 border-amber-200 text-amber-800 text-[10px] font-bold px-2 py-0.5 border uppercase">
+                          {selectedRequest.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedRequest.status === "pending" && (
+                    <div className="flex gap-2 pt-2">
+                      <Button 
+                        onClick={() => {
+                          const req = selectedRequest;
+                          setSelectedRequest(null);
+                          setConfirmAction({ type: "approve", requestId: req.id, userName: req.userName });
+                        }}
+                        className="flex-1 bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg cursor-pointer shadow-sm active:scale-98 transition-all"
+                      >
+                        Approve Request
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => {
+                          const req = selectedRequest;
+                          setSelectedRequest(null);
+                          setConfirmAction({ type: "reject", requestId: req.id, userName: req.userName });
+                        }}
+                        className="flex-1 border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold text-xs h-10 rounded-lg cursor-pointer active:scale-98 transition-all"
+                      >
+                        Reject Request
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* AI Address Verification panel */}
-              <div className="space-y-3.5 flex flex-col justify-between">
-                <div className="space-y-2">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-soft-violet animate-pulse" />
-                    AI Address Authenticator
-                  </span>
-                  <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                    OCR models scan the document to cross-reference extracted address strings against municipal databases for Unit {selectedRequest.unitNumber}.
-                  </p>
-                </div>
-
-                {verifyingId === selectedRequest.id ? (
-                  <div className="p-5 rounded-xl border border-dashed border-soft-violet/40 bg-soft-violet/5 flex flex-col items-center justify-center gap-2 py-12">
-                    <div className="w-6 h-6 border-2 border-soft-violet/20 border-t-soft-violet rounded-full animate-spin"></div>
-                    <span className="text-[10px] font-bold text-soft-violet uppercase tracking-wider animate-pulse">Running OCR Cross-Check...</span>
-                  </div>
-                ) : verificationResult[selectedRequest.id] ? (
-                  <div className="p-4 rounded-xl border border-soft-violet/30 bg-soft-violet/5 space-y-2.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[9px] uppercase font-bold text-soft-violet tracking-wider">Verification Match Details</span>
-                      <Badge className="bg-emerald-50 border-emerald-200 text-emerald-800 text-[8.5px] font-bold px-2 py-0.5 border uppercase tracking-wider">
-                        Address Verified
-                      </Badge>
-                    </div>
-                    
-                    <div className="space-y-2 text-[10px]">
-                      <div className="text-ink">
-                        <span className="font-bold text-on-surface-variant">Extracted ID Address:</span>
-                        <p className="font-semibold bg-white p-2 rounded-lg border border-line/70 mt-1 leading-normal text-ink/90">
-                          {verificationResult[selectedRequest.id].address}
-                        </p>
-                      </div>
-                      
-                      <div className="flex justify-between pt-1 border-t border-line/25">
-                        <span className="text-on-surface-variant">Registry Check:</span>
-                        <span className="font-bold text-emerald-700">Unit {selectedRequest.unitNumber} Confirmed</span>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <span className="text-on-surface-variant">OCR Accuracy:</span>
-                        <span className="font-bold text-soft-violet">{verificationResult[selectedRequest.id].score}</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <Button 
-                    onClick={async () => {
-                      setVerifyingId(selectedRequest.id);
-                      await new Promise((resolve) => setTimeout(resolve, 1500));
-                      setVerifyingId(null);
-                      setVerificationResult(prev => ({
-                        ...prev,
-                        [selectedRequest.id]: {
-                          address: `Unit ${selectedRequest.unitNumber}, CEN Emerald Heights, Society Boulevard, Sector 15`,
-                          matched: true,
-                          score: "98.7%"
-                        }
-                      }));
-                      toast.success("AI Authentication completed successfully!");
-                    }}
-                    className="w-full bg-soft-violet hover:bg-soft-violet/90 text-white font-semibold text-xs h-10 rounded-lg cursor-pointer flex items-center justify-center gap-1.5 shadow-sm mt-auto active:scale-98 transition-all"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" /> Authenticate ID (AI)
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -739,7 +757,7 @@ function Requests({ sid }: { sid: string }) {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
               {confirmAction?.type === "approve" 
-                ? `Are you sure you want to approve ${confirmAction?.userName} to onboard? They will gain access to your society directory.`
+                ? `Are you sure you want to approve ${confirmAction?.userName} to onboard? They will gain access to your society directory and automatically receive ${initCredits} initial welcome credits.`
                 : `Are you sure you want to reject ${confirmAction?.userName}'s onboarding request?`
               }
             </AlertDialogDescription>
