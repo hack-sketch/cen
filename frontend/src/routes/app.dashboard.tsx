@@ -509,17 +509,21 @@ function ResidentDash() {
   // Multi-resident household queries
   const allUsers = useQuery({ queryKey: ["allRes", sid], queryFn: () => userService.listBySociety(sid), enabled: !!user?.householdId });
   const households = useQuery({ queryKey: ["hh", sid], queryFn: () => householdService.listBySociety(sid), enabled: !!user?.householdId });
-  const joinRequests = useQuery({ queryKey: ["jr", sid], queryFn: () => joinRequestService.listBySociety(sid), enabled: !!user?.isPrimaryResident });
 
   const myHousehold = households.data?.find((h) => h.id === user?.householdId);
   const householdMembers = allUsers.data?.filter((u) => u.householdId === user?.householdId) ?? [];
   const primaryLead = householdMembers.find((u) => u.isPrimaryResident) || householdMembers.find((u) => u.id === myHousehold?.claimedByUserId) || (user?.isPrimaryResident ? user! : householdMembers[0]);
   const coResidents = householdMembers.filter((u) => u.id !== primaryLead?.id);
 
+  const isPrimaryLeadOrAdmin = !!user?.isPrimaryResident || !!user?.isCoordinator || user?.role === "admin" || user?.role === "owner" || (myHousehold && myHousehold.claimedByUserId === user?.id);
+  const joinRequests = useQuery({ queryKey: ["jr", sid], queryFn: () => joinRequestService.listBySociety(sid), enabled: isPrimaryLeadOrAdmin && !!user?.householdId });
+
   // Pending join requests targeted to this primary resident's household
-  const pendingHouseholdRequests = joinRequests.data?.filter(
-    (jr) => jr.status === "pending" && (jr.householdId === user?.householdId || jr.targetApproverId === user?.id)
-  ) ?? [];
+  const pendingHouseholdRequests = isPrimaryLeadOrAdmin
+    ? (joinRequests.data?.filter(
+        (jr) => jr.status === "pending" && (jr.householdId === user?.householdId || jr.targetApproverId === user?.id)
+      ) ?? [])
+    : [];
 
   const myOpen = complaints.data?.filter((c) => c.status === "open").length ?? 0;
   const myActive = skills.data?.filter((s) => s.providerId === user!.id && s.status === "approved").length ?? 0;
@@ -562,8 +566,8 @@ function ResidentDash() {
               )}
             >
               <Crown className="h-3.5 w-3.5 fill-amber-300 text-amber-950 shrink-0" />
-              <span className="truncate">Household Governance</span>
-              {pendingHouseholdRequests.length > 0 && (
+              <span className="truncate">{isPrimaryLeadOrAdmin ? "Household Governance" : "Household Directory"}</span>
+              {isPrimaryLeadOrAdmin && pendingHouseholdRequests.length > 0 && (
                 <Badge className="bg-rose-500 text-white text-[9px] font-extrabold px-1.5 py-0 rounded-full animate-bounce shrink-0">
                   {pendingHouseholdRequests.length}
                 </Badge>
@@ -589,13 +593,17 @@ function ResidentDash() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="text-base sm:text-lg font-bold text-ink truncate">Unit {myHousehold?.unitNumber || user.householdId} Governance</CardTitle>
+                    <CardTitle className="text-base sm:text-lg font-bold text-ink truncate">
+                      Unit {myHousehold?.unitNumber || user.householdId} {isPrimaryLeadOrAdmin ? "Governance" : "Household Directory"}
+                    </CardTitle>
                     <Badge className="bg-amber-100 text-amber-950 border-amber-300 text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5">
-                      ⭐ Primary Lead
+                      {isPrimaryLeadOrAdmin ? "⭐ Primary Lead" : "Household Resident"}
                     </Badge>
                   </div>
                   <CardDescription className="text-[11px] sm:text-xs text-on-surface-variant mt-1 line-clamp-2">
-                    Manage co-residents, approve join applications, and inspect verification proof.
+                    {isPrimaryLeadOrAdmin 
+                      ? "Manage co-residents, approve join applications, and inspect verification proof."
+                      : "View co-residents and occupants assigned to your household unit."}
                   </CardDescription>
                 </div>
               </div>
@@ -605,29 +613,34 @@ function ResidentDash() {
                   <div className="text-[9px] uppercase font-bold text-on-surface-variant">Capacity</div>
                   <div className="text-xs sm:text-sm font-extrabold text-ink">{householdMembers.length} / {myHousehold?.maxMembers || 4}</div>
                 </div>
-                <div className="bg-white border border-amber-200/90 rounded-xl px-3 py-1.5 text-center shadow-2xs">
-                  <div className="text-[9px] uppercase font-bold text-on-surface-variant">Requests</div>
-                  <div className="text-xs sm:text-sm font-extrabold text-amber-700">{pendingHouseholdRequests.length} Pending</div>
-                </div>
+                {isPrimaryLeadOrAdmin && (
+                  <div className="bg-white border border-amber-200/90 rounded-xl px-3 py-1.5 text-center shadow-2xs">
+                    <div className="text-[9px] uppercase font-bold text-on-surface-variant">Requests</div>
+                    <div className="text-xs sm:text-sm font-extrabold text-amber-700">{pendingHouseholdRequests.length} Pending</div>
+                  </div>
+                )}
               </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-4 sm:p-6 space-y-6">
-            <Tabs defaultValue={pendingHouseholdRequests.length > 0 ? "requests" : "members"} className="w-full">
-              <TabsList className="grid grid-cols-2 w-full max-w-md bg-panel/70 p-1 rounded-xl border border-line/50 mb-4">
-                <TabsTrigger value="members" className="text-[11px] sm:text-xs font-bold px-2 sm:px-4 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-xs truncate">
-                  Members ({coResidents.length})
-                </TabsTrigger>
-                <TabsTrigger value="requests" className="text-[11px] sm:text-xs font-bold px-2 sm:px-4 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-xs flex items-center justify-center gap-1 truncate">
-                  <span>Requests</span>
-                  {pendingHouseholdRequests.length > 0 && (
-                    <Badge className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0 shrink-0">
-                      {pendingHouseholdRequests.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
+            <Tabs defaultValue={isPrimaryLeadOrAdmin && pendingHouseholdRequests.length > 0 ? "requests" : "members"} className="w-full">
+              {isPrimaryLeadOrAdmin ? (
+                <TabsList className="grid grid-cols-2 w-full max-w-md bg-panel/70 p-1 rounded-xl border border-line/50 mb-4">
+                  <TabsTrigger value="members" className="text-[11px] sm:text-xs font-bold px-2 sm:px-4 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-xs truncate">
+                    Members ({coResidents.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="requests" className="text-[11px] sm:text-xs font-bold px-2 sm:px-4 py-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-xs flex items-center justify-center gap-1 truncate">
+                    <span>Requests</span>
+                    {pendingHouseholdRequests.length > 0 && (
+                      <Badge className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0 shrink-0">
+                        {pendingHouseholdRequests.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+              ) : null}
+
 
               {/* CO-RESIDENTS ROSTER TAB */}
               <TabsContent value="members" className="space-y-4">
@@ -724,115 +737,118 @@ function ResidentDash() {
                 </div>
               </TabsContent>
 
-              {/* PENDING JOIN REQUESTS TAB */}
-              <TabsContent value="requests" className="space-y-4">
-                <div className="text-xs uppercase font-extrabold tracking-wider text-on-surface-variant/80">
-                  Applicants Requesting to Join Unit {myHousehold?.unitNumber || user.householdId} ({pendingHouseholdRequests.length})
-                </div>
-
-                {pendingHouseholdRequests.length === 0 ? (
-                  <div className="py-10 text-center text-xs text-on-surface-variant border border-dashed border-line rounded-2xl bg-white p-6 space-y-2">
-                    <ShieldCheck className="h-8 w-8 text-emerald-600 mx-auto opacity-80" />
-                    <div className="font-bold text-ink text-sm">No Pending Household Join Requests</div>
-                    <p className="text-[11px] text-on-surface-variant max-w-sm mx-auto">
-                      All join requests for your household slot have been processed. New join applications will appear here for your review.
-                    </p>
+              {/* PENDING JOIN REQUESTS TAB — ONLY RENDERED FOR PRIMARY LEADS / ADMINS */}
+              {isPrimaryLeadOrAdmin && (
+                <TabsContent value="requests" className="space-y-4">
+                  <div className="text-xs uppercase font-extrabold tracking-wider text-on-surface-variant/80">
+                    Applicants Requesting to Join Unit {myHousehold?.unitNumber || user.householdId} ({pendingHouseholdRequests.length})
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingHouseholdRequests.map((jr) => (
-                      <div key={jr.id} className="bg-white border border-amber-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4 hover:shadow-md transition-all">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line/40 pb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs sm:text-sm flex items-center justify-center shadow-inner shrink-0">
-                              {jr.userName.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs sm:text-sm text-ink truncate">{jr.userName}</div>
-                              <div className="text-[11px] sm:text-xs text-on-surface-variant flex items-center gap-1 mt-0.5 truncate">
-                                <Mail className="h-3 w-3 text-amber-700 shrink-0" />
-                                <span className="truncate">{jr.userEmail || jr.email || allUsers.data?.find((u) => u.id === jr.userId)?.email || `${jr.userName.toLowerCase().replace(/\s+/g, "")}@cen.app`}</span>
+
+                  {pendingHouseholdRequests.length === 0 ? (
+                    <div className="py-10 text-center text-xs text-on-surface-variant border border-dashed border-line rounded-2xl bg-white p-6 space-y-2">
+                      <ShieldCheck className="h-8 w-8 text-emerald-600 mx-auto opacity-80" />
+                      <div className="font-bold text-ink text-sm">No Pending Household Join Requests</div>
+                      <p className="text-[11px] text-on-surface-variant max-w-sm mx-auto">
+                        All join requests for your household slot have been processed. New join applications will appear here for your review.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pendingHouseholdRequests.map((jr) => (
+                        <div key={jr.id} className="bg-white border border-amber-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4 hover:shadow-md transition-all">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line/40 pb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs sm:text-sm flex items-center justify-center shadow-inner shrink-0">
+                                {jr.userName.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs sm:text-sm text-ink truncate">{jr.userName}</div>
+                                <div className="text-[11px] sm:text-xs text-on-surface-variant flex items-center gap-1 mt-0.5 truncate">
+                                  <Mail className="h-3 w-3 text-amber-700 shrink-0" />
+                                  <span className="truncate">{jr.userEmail || jr.email || allUsers.data?.find((u) => u.id === jr.userId)?.email || `${jr.userName.toLowerCase().replace(/\s+/g, "")}@cen.app`}</span>
+                                </div>
                               </div>
                             </div>
+
+                            <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 self-start sm:self-center">
+                              👑 Secondary Member Application
+                            </Badge>
                           </div>
 
-                          <Badge className="bg-amber-100 text-amber-900 border-amber-300 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 self-start sm:self-center">
-                            👑 Secondary Member Application
-                          </Badge>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs bg-amber-50/40 p-3 rounded-xl border border-amber-200/60">
-                          <div className="flex items-center gap-2 text-on-surface-variant">
-                            <Calendar className="h-3.5 w-3.5 text-amber-700 shrink-0" />
-                            <span>Submitted: <strong className="text-ink font-semibold">{jr.submittedAt}</strong></span>
-                          </div>
-                          <div className="flex items-center gap-2 text-on-surface-variant">
-                            <Building2 className="h-3.5 w-3.5 text-amber-700 shrink-0" />
-                            <span>Target Slot: <strong className="text-ink font-semibold">Unit {jr.unitNumber}</strong></span>
-                          </div>
-                        </div>
-
-                        {/* Applicant Verification Document Box */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-panel/40 border border-line/60 p-3 rounded-xl">
-                          <div className="flex items-center gap-2 text-xs font-semibold text-ink">
-                            <FileText className="h-4 w-4 text-deep-forest shrink-0" />
-                            <span className="truncate">Applicant ID Proof Document</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs bg-amber-50/40 p-3 rounded-xl border border-amber-200/60">
+                            <div className="flex items-center gap-2 text-on-surface-variant">
+                              <Calendar className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                              <span>Submitted: <strong className="text-ink font-semibold">{jr.submittedAt}</strong></span>
+                            </div>
+                            <div className="flex items-center gap-2 text-on-surface-variant">
+                              <Building2 className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                              <span>Target Slot: <strong className="text-ink font-semibold">Unit {jr.unitNumber}</strong></span>
+                            </div>
                           </div>
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setViewingIdProof({ userName: jr.userName, url: jr.idProofUrl })}
-                            className="text-xs font-bold border-deep-forest/40 text-deep-forest hover:bg-deep-forest/10 h-8 px-3 cursor-pointer w-full sm:w-auto"
-                          >
-                            <Eye className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                            Inspect ID Document
-                          </Button>
-                        </div>
+                          {/* Applicant Verification Document Box */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-panel/40 border border-line/60 p-3 rounded-xl">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+                              <FileText className="h-4 w-4 text-deep-forest shrink-0" />
+                              <span className="truncate">Applicant ID Proof Document</span>
+                            </div>
 
-                        {/* Approval / Rejection Actions */}
-                        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              try {
-                                await joinRequestService.reject(jr.id);
-                                toast.info(`Rejected request from ${jr.userName}`);
-                                qc.invalidateQueries({ queryKey: ["jr", sid] });
-                              } catch (err: any) {
-                                toast.error(err.message || "Failed to reject request");
-                              }
-                            }}
-                            className="text-xs font-semibold h-9 px-4 border-line-strong hover:bg-panel cursor-pointer w-full sm:w-auto"
-                          >
-                            Reject Request
-                          </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setViewingIdProof({ userName: jr.userName, url: jr.idProofUrl })}
+                              className="text-xs font-bold border-deep-forest/40 text-deep-forest hover:bg-deep-forest/10 h-8 px-3 cursor-pointer w-full sm:w-auto"
+                            >
+                              <Eye className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                              Inspect ID Document
+                            </Button>
+                          </div>
 
-                          <Button
-                            size="sm"
-                            onClick={async () => {
-                              try {
-                                await joinRequestService.approve(jr.id);
-                                toast.success(`Approved ${jr.userName} to join your household!`);
-                                qc.invalidateQueries({ queryKey: ["jr", sid] });
-                                qc.invalidateQueries({ queryKey: ["allRes", sid] });
-                                qc.invalidateQueries({ queryKey: ["hh", sid] });
-                              } catch (err: any) {
-                                toast.error(err.message || "Failed to approve request");
-                              }
-                            }}
-                            className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-9 px-5 cursor-pointer shadow-sm active:scale-98 transition-all w-full sm:w-auto"
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-1.5 shrink-0" />
-                            Approve & Add to Household
-                          </Button>
+                          {/* Approval / Rejection Actions */}
+                          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  await joinRequestService.reject(jr.id);
+                                  toast.info(`Rejected request from ${jr.userName}`);
+                                  qc.invalidateQueries({ queryKey: ["jr", sid] });
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to reject request");
+                                }
+                              }}
+                              className="text-xs font-semibold h-9 px-4 border-line-strong hover:bg-panel cursor-pointer w-full sm:w-auto"
+                            >
+                              Reject Request
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  await joinRequestService.approve(jr.id);
+                                  toast.success(`Approved ${jr.userName} to join your household!`);
+                                  qc.invalidateQueries({ queryKey: ["jr", sid] });
+                                  qc.invalidateQueries({ queryKey: ["allRes", sid] });
+                                  qc.invalidateQueries({ queryKey: ["hh", sid] });
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to approve request");
+                                }
+                              }}
+                              className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-9 px-5 cursor-pointer shadow-sm active:scale-98 transition-all w-full sm:w-auto"
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-1.5 shrink-0" />
+                              Approve & Add to Household
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              )}
+
             </Tabs>
           </CardContent>
         </Card>

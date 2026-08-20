@@ -339,8 +339,25 @@ def submit_join_request(db: Session, user: User, req_in: JoinRequestCreate) -> J
     return jr
 
 
-def list_join_requests_by_society(db: Session, society_id: str) -> List[JoinRequest]:
-    reqs = db.query(JoinRequest).filter(JoinRequest.society_id == society_id).all()
+def list_join_requests_by_society(
+    db: Session, society_id: str, current_user: Optional[User] = None
+) -> List[JoinRequest]:
+    if current_user:
+        is_admin_or_coord = current_user.role in ["owner", "admin"] or current_user.is_coordinator
+        if is_admin_or_coord:
+            reqs = db.query(JoinRequest).filter(JoinRequest.society_id == society_id).all()
+        elif current_user.is_primary_resident and current_user.household_id:
+            # Primary resident lead only views requests for their unit
+            reqs = db.query(JoinRequest).filter(
+                JoinRequest.society_id == society_id,
+                (JoinRequest.household_id == current_user.household_id) | (JoinRequest.target_approver_id == current_user.id),
+            ).all()
+        else:
+            # Regular / Secondary residents are not authorized to view society or household join requests
+            return []
+    else:
+        reqs = db.query(JoinRequest).filter(JoinRequest.society_id == society_id).all()
+
     for r in reqs:
         if not r.user_email:
             u = db.query(User).filter(User.id == r.user_id).first()
@@ -355,16 +372,16 @@ def approve_join_request(db: Session, request_id: str, current_user: Optional[Us
         raise NotFoundException(f"Join request with ID '{request_id}' not found")
 
     if current_user:
-        # Permission check: Admin/Owner/Coordinator or Primary Resident of the unit
+        # Hierarchical Permission check: Admin/Owner/Coordinator or Primary Resident Lead of the unit
         is_admin_or_coord = current_user.role in ["owner", "admin"] or current_user.is_coordinator
         is_target_primary = (
-            jr.approver_type == "primary_resident" and 
-            (current_user.id == jr.target_approver_id or current_user.household_id == jr.household_id)
+            (current_user.id == jr.target_approver_id) or 
+            (current_user.is_primary_resident and current_user.household_id == jr.household_id)
         )
         if not (is_admin_or_coord or is_target_primary):
             raise APIException(
                 status_code=403,
-                detail="You do not have permissions to approve join requests for this household unit.",
+                detail="Access Denied: Only primary household leads, society coordinators, or administrators are authorized to approve membership join requests.",
                 code="FORBIDDEN_APPROVAL",
             )
 
@@ -433,14 +450,30 @@ def approve_join_request(db: Session, request_id: str, current_user: Optional[Us
     return jr
 
 
-def reject_join_request(db: Session, request_id: str) -> JoinRequest:
+def reject_join_request(db: Session, request_id: str, current_user: Optional[User] = None) -> JoinRequest:
     jr = db.query(JoinRequest).filter(JoinRequest.id == request_id).first()
     if not jr:
         raise NotFoundException(f"Join request with ID '{request_id}' not found")
+
+    if current_user:
+        # Hierarchical Permission check: Admin/Owner/Coordinator or Primary Resident Lead of the unit
+        is_admin_or_coord = current_user.role in ["owner", "admin"] or current_user.is_coordinator
+        is_target_primary = (
+            (current_user.id == jr.target_approver_id) or 
+            (current_user.is_primary_resident and current_user.household_id == jr.household_id)
+        )
+        if not (is_admin_or_coord or is_target_primary):
+            raise APIException(
+                status_code=403,
+                detail="Access Denied: Only primary household leads, society coordinators, or administrators are authorized to reject membership join requests.",
+                code="FORBIDDEN_APPROVAL",
+            )
+
     jr.status = "rejected"
     db.commit()
     db.refresh(jr)
     return jr
+
 
 
 def update_household(db: Session, household_id: str, unit_number: str) -> Household:

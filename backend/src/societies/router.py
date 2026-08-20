@@ -219,7 +219,7 @@ def list_join_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token),
 ):
-    return soc_service.list_join_requests_by_society(db, society_id)
+    return soc_service.list_join_requests_by_society(db, society_id, current_user=current_user)
 
 
 @router.post("/societies/join-requests", response_model=JoinRequestResponse, status_code=status.HTTP_201_CREATED)
@@ -246,7 +246,8 @@ def reject_join_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token),
 ):
-    return soc_service.reject_join_request(db, request_id)
+    return soc_service.reject_join_request(db, request_id, current_user=current_user)
+
 
 
 @router.delete("/societies/join-requests/{request_id}")

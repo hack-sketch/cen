@@ -458,8 +458,15 @@ export const joinRequestService = {
     try {
       await apiFetch<any>(`/societies/join-requests/${id}/approve`, { method: "POST" });
       return true;
-    } catch (err) {
-      console.warn("[API Notice] approve joinRequest fallback:", err);
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const currentUser = getStoredUser();
+    if (currentUser) {
+      const isLeadOrAdmin = currentUser.isPrimaryResident || currentUser.isCoordinator || currentUser.role === "admin" || currentUser.role === "owner";
+      if (!isLeadOrAdmin) {
+        throw new Error("Access Denied: Only primary leads, coordinators, or admins can approve join requests.");
+      }
     }
     const r = state.joinRequests.find((x) => x.id === id) as any;
     if (r) {
@@ -503,13 +510,21 @@ export const joinRequestService = {
     try {
       await apiFetch<any>(`/societies/join-requests/${id}/reject`, { method: "POST" });
       return true;
-    } catch (err) {
-      console.warn("[API Notice] reject joinRequest fallback:", err);
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const currentUser = getStoredUser();
+    if (currentUser) {
+      const isLeadOrAdmin = currentUser.isPrimaryResident || currentUser.isCoordinator || currentUser.role === "admin" || currentUser.role === "owner";
+      if (!isLeadOrAdmin) {
+        throw new Error("Access Denied: Only primary leads, coordinators, or admins can reject join requests.");
+      }
     }
     const r = state.joinRequests.find((x) => x.id === id);
     if (r) r.status = "rejected";
     return delay(true);
   },
+
   getByUserId: async (userId: string) => {
     try {
       const res = await apiFetch<any>("/societies/join-requests/me");

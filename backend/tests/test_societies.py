@@ -290,3 +290,71 @@ def test_coordinator_promotion_with_granular_privileges(client, db_session):
     assert data["canManageOnboarding"] is True
     assert data["canDeactivateResidents"] is True
 
+
+def test_join_request_hierarchical_permissions(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society, Household, JoinRequest
+
+    admin = create_user(db_session, UserCreate(name="Soc Admin", email="soc_adm@cen.app", password="password123"), role="admin")
+    soc = Society(name="Perm Soc", address="2 Perm St", admin_id=admin.id, key="PERM-SOC")
+    db_session.add(soc)
+    db_session.flush()
+
+    hh = Household(id="h-perm-1", society_id=soc.id, unit_number="P-101", claimed=True, claimed_by_user_id=None, occupants_count=1)
+    db_session.add(hh)
+
+    primary = create_user(db_session, UserCreate(name="Primary Lead", email="primary_lead@cen.app", password="password123"), role="resident")
+    primary.society_id = soc.id
+    primary.household_id = hh.id
+    primary.is_primary_resident = True
+    hh.claimed_by_user_id = primary.id
+
+    secondary = create_user(db_session, UserCreate(name="Secondary Res", email="secondary_res@cen.app", password="password123"), role="resident")
+    secondary.society_id = soc.id
+    secondary.household_id = hh.id
+    secondary.is_primary_resident = False
+
+    applicant = create_user(db_session, UserCreate(name="Applicant User", email="applicant@cen.app", password="password123"), role="resident")
+
+    jr = JoinRequest(
+        user_id=applicant.id,
+        user_name=applicant.name,
+        user_email=applicant.email,
+        society_id=soc.id,
+        household_id=hh.id,
+        unit_number="P-101",
+        status="pending",
+        approver_type="primary_resident",
+        target_approver_id=primary.id,
+    )
+    db_session.add(jr)
+    db_session.commit()
+
+    # 1. Secondary resident tries to approve -> 403 Forbidden
+    login_sec = client.post("/api/v1/auth/login", json={"email": "secondary_res@cen.app", "password": "password123"})
+    sec_token = login_sec.json()["accessToken"]
+
+    sec_appr = client.post(f"/api/v1/societies/join-requests/{jr.id}/approve", headers={"Authorization": f"Bearer {sec_token}"})
+    assert sec_appr.status_code == 403
+    assert sec_appr.json()["code"] == "FORBIDDEN_APPROVAL"
+
+    # Secondary resident tries to reject -> 403 Forbidden
+    sec_rej = client.post(f"/api/v1/societies/join-requests/{jr.id}/reject", headers={"Authorization": f"Bearer {sec_token}"})
+    assert sec_rej.status_code == 403
+    assert sec_rej.json()["code"] == "FORBIDDEN_APPROVAL"
+
+    # Secondary resident lists join requests -> receives empty list
+    sec_list = client.get(f"/api/v1/societies/{soc.id}/join-requests", headers={"Authorization": f"Bearer {sec_token}"})
+    assert sec_list.status_code == 200
+    assert len(sec_list.json()) == 0
+
+    # 2. Primary lead approves -> 200 OK
+    login_pri = client.post("/api/v1/auth/login", json={"email": "primary_lead@cen.app", "password": "password123"})
+    pri_token = login_pri.json()["accessToken"]
+
+    pri_appr = client.post(f"/api/v1/societies/join-requests/{jr.id}/approve", headers={"Authorization": f"Bearer {pri_token}"})
+    assert pri_appr.status_code == 200
+    assert pri_appr.json()["status"] == "approved"
+
+
