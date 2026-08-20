@@ -31,6 +31,8 @@ export interface ExchangeItemCardProps {
   available?: boolean;
   type: "skill" | "resource";
   myPendingBookingId?: string;
+  summary?: string;
+  intentTags?: string[];
   onAction: (id: string, userId: string) => Promise<any>;
   onCancelRequest?: (bookingId: string) => Promise<any>;
   categoryColors?: Record<string, string>;
@@ -61,6 +63,8 @@ export function ExchangeItemCard({
   available = true,
   type,
   myPendingBookingId,
+  summary,
+  intentTags = [],
   onAction,
   onCancelRequest,
   categoryColors = DEFAULT_CAT_COLORS,
@@ -134,7 +138,25 @@ export function ExchangeItemCard({
             </div>
 
             <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 pt-1">{description}</p>
+
+            {summary && (
+              <div className="bg-soft-violet/10 border border-soft-violet/20 rounded-lg p-2 text-[10.5px] text-ink flex items-start gap-1.5 mt-1">
+                <Sparkles className="h-3.5 w-3.5 text-soft-violet shrink-0 mt-0.5" />
+                <span className="leading-tight italic">{summary}</span>
+              </div>
+            )}
+
+            {intentTags && intentTags.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {intentTags.map((it) => (
+                  <Badge key={it} className="bg-soft-violet/15 text-soft-violet text-[9px] font-semibold border-0 py-0 px-1.5">
+                    ✦ {it}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
+
 
           <div className="space-y-3.5">
             {isSkill ? (

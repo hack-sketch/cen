@@ -75,19 +75,21 @@ function Page() {
     (s) => (cat === "all" || s.category === cat) && s.title.toLowerCase().includes(q.toLowerCase()),
   );
 
-  const handleAISearch = async () => {
-    if (!aiInput.trim()) return;
+  const handleAISearch = async (customQuery?: string) => {
+    const queryToRun = (customQuery || aiInput).trim();
+    if (!queryToRun) return;
     setSearchingAI(true);
     try {
-      const r = await matchSkillResource(aiInput, sid);
+      const r = await matchSkillResource(queryToRun, sid);
       setAi(r);
-      toast.success(`Found ${r.length} matches!`);
+      toast.success(`Found ${r.length} AI matches!`);
     } catch {
       toast.error("AI search failed.");
     } finally {
       setSearchingAI(false);
     }
   };
+
 
   return (
     <div className="space-y-6 pb-12">
@@ -100,24 +102,28 @@ function Page() {
       {/* AI Semantic Search Box */}
       <Card className="border-soft-violet/30 shadow-sm bg-gradient-to-br from-soft-violet/5 via-[#f8f7ff] to-transparent">
         <CardContent className="p-5 space-y-3">
-          <Label className="flex items-center gap-2 text-xs font-bold text-ink">
-            <Sparkles className="h-4.5 w-4.5 text-soft-violet animate-pulse" />
-            AI-Powered Semantic Finder
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2 text-xs font-bold text-ink">
+              <Sparkles className="h-4.5 w-4.5 text-soft-violet animate-pulse" />
+              AI Layman Search & Semantic Intent Summarizer
+            </Label>
+            <span className="text-[10px] text-on-surface-variant font-medium hidden sm:inline">Natural language & everyday query processing</span>
+          </div>
           <div className="flex gap-2">
             <Input 
-              placeholder='e.g., "I need a tutoring session for Python basics or help landscaping my backyard..."' 
+              placeholder='e.g., "I need someone to help fix my leaky kitchen pipe" or "teach math & science to my kids"...' 
               value={aiInput}
               onChange={(e) => setAiInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAISearch()}
               className="h-10 text-xs rounded-lg border-line-strong/60 focus:border-soft-violet focus:ring-1 focus:ring-soft-violet/20 bg-white"
             />
             <Button 
-              onClick={handleAISearch} 
+              onClick={() => handleAISearch()} 
               disabled={searchingAI}
-              className="bg-soft-violet hover:bg-soft-violet/90 text-white font-semibold h-10 px-4 rounded-lg text-xs cursor-pointer shadow-sm"
+              className="bg-soft-violet hover:bg-soft-violet/90 text-white font-semibold h-10 px-4 rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all"
             >
-              {searchingAI ? "Searching..." : "Ask AI"}
+
+              {searchingAI ? "Searching..." : "Search with AI"}
             </Button>
             {ai && (
               <Button 
@@ -131,23 +137,76 @@ function Page() {
           </div>
           
           {ai && (
-            <div className="mt-4 pt-4 border-t border-line/45 space-y-2.5">
-              <div className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">Recommended AI Matches ({ai.length})</div>
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 pt-4 border-t border-line/45 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[10.5px] uppercase font-extrabold tracking-wider text-soft-violet flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> AI Intent Matches & Summaries ({ai.length})
+                </div>
+                <span className="text-[10px] text-on-surface-variant">Ranked by semantic intent relevance</span>
+              </div>
+              <div className="grid gap-3.5 sm:grid-cols-2">
                 {ai.map((m, i) => {
                   const title = "title" in m.item ? m.item.title : m.item.name;
-                  const itemCategory = "category" in m.item ? m.item.category : "Resource";
+                  const itemCategory = "category" in m.item ? m.item.category : "General";
+                  const provider = "providerName" in m.item ? m.item.providerName : m.item.ownerName;
+                  const credits = m.item.credits || 0;
+                  const isOwner = (m.item.providerId || m.item.ownerId) === user!.id;
+                  
                   return (
-                    <div key={i} className="rounded-xl border border-dashed border-soft-violet/50 bg-ai-bg/40 p-3.5 flex flex-col gap-1.5 shadow-sm">
-                      <div className="flex justify-between items-start gap-2">
-                        <span className="font-bold text-xs text-ink line-clamp-1">{title}</span>
-                        <Badge className="bg-soft-violet text-white text-[8px] uppercase tracking-wide px-1.5 py-0.5 rounded border-0">
-                          {m.kind}
-                        </Badge>
+                    <div key={i} className="rounded-xl border border-soft-violet/40 bg-white p-4 flex flex-col justify-between gap-2.5 shadow-xs hover:shadow-md transition-all">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="font-bold text-xs text-ink line-clamp-1">{title}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[8.5px] font-bold py-0.5 px-1.5 rounded">
+                              {m.score}% Match
+                            </Badge>
+                            <Badge className="bg-soft-violet text-white text-[8px] uppercase tracking-wide px-1.5 py-0.5 rounded border-0">
+                              {m.kind}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {/* AI Summary Banner */}
+                        <div className="bg-soft-violet/10 border border-soft-violet/20 rounded-lg p-2.5 text-xs text-ink space-y-1">
+                          <div className="text-[9.5px] font-extrabold text-soft-violet uppercase tracking-wider flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-soft-violet" /> AI Summary & Scope
+                          </div>
+                          <p className="text-[11px] text-slate-700 leading-relaxed italic">
+                            "{m.summary || m.item.description}"
+                          </p>
+                        </div>
+
+                        {/* Intent Matching Badges */}
+                        {m.intentTags && m.intentTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {m.intentTags.map((tag: string) => (
+                              <Badge key={tag} className="bg-soft-violet/15 text-soft-violet text-[9px] font-semibold border-0 py-0.5 px-1.5">
+                                ✦ {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="text-[10px] text-on-surface-variant flex items-center justify-between pt-1 border-t border-line/30">
+                          <span>By <strong className="text-ink">{provider}</strong> ({itemCategory})</span>
+                          <strong className="text-deep-forest font-bold">{credits} Credits</strong>
+                        </div>
                       </div>
-                      <p className="text-[10px] text-on-surface-variant leading-relaxed italic">
-                        "{m.reason}"
-                      </p>
+
+                      {!isOwner && m.kind === "skill" && (
+                        <Button
+                          size="sm"
+                          className="w-full h-8 text-xs font-semibold bg-deep-forest hover:bg-deep-forest/90 text-white cursor-pointer active:scale-98 transition-all shadow-xs mt-1"
+                          onClick={async () => {
+                            await bookingService.requestSkill(m.item.id, m.item.providerId);
+                            qc.invalidateQueries();
+                            toast.success(`Purchase request sent for "${title}"!`);
+                          }}
+                        >
+                          Request Skill ({credits} Credits)
+                        </Button>
+                      )}
                     </div>
                   );
                 })}
@@ -156,6 +215,7 @@ function Page() {
           )}
         </CardContent>
       </Card>
+
 
       {/* Global Pending Requests Banner for Skill Provider */}
       {pendingReceived.length > 0 && (
@@ -249,34 +309,55 @@ function Page() {
 
         <TabsContent value="browse" className="space-y-6 animate-page-fade">
           {/* Filtering bar */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-on-surface-variant/75" />
-              <Input 
-                placeholder="Search active listings..." 
-                value={q} 
-                onChange={(e) => setQ(e.target.value)} 
-                className="pl-9 h-10 text-xs rounded-lg border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20" 
-              />
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-on-surface-variant/75" />
+                <Input 
+                  placeholder="Search listings by title, keywords, or natural language..." 
+                  value={q} 
+                  onChange={(e) => setQ(e.target.value)} 
+                  className="pl-9 h-10 text-xs rounded-lg border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20" 
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <Select value={cat} onValueChange={setCat}>
+                  <SelectTrigger className="w-48 h-10 text-xs border-line-strong/60 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-3.5 w-3.5 text-on-surface-variant" />
+                      <SelectValue />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    {CATS.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            
-            <div className="flex gap-2">
-              <Select value={cat} onValueChange={setCat}>
-                <SelectTrigger className="w-48 h-10 text-xs border-line-strong/60 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-3.5 w-3.5 text-on-surface-variant" />
-                    <SelectValue />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {CATS.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
+            {q.trim().length >= 3 && (
+              <div className="flex items-center gap-2 pt-0.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setAiInput(q.trim());
+                    handleAISearch(q.trim());
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="h-7 text-[11px] font-semibold border-soft-violet/40 text-soft-violet bg-soft-violet/5 hover:bg-soft-violet/10 cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Sparkles className="h-3 w-3 text-soft-violet animate-pulse" />
+                  Ask AI to analyze and summarize matches for "{q.trim()}"
+                </Button>
+              </div>
+            )}
           </div>
+
 
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-xs text-on-surface-variant border border-dashed border-line rounded-xl bg-white">

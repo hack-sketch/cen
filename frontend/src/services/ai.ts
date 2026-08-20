@@ -175,10 +175,19 @@ export async function chatbotQuery(
 }
 
 
+export interface MatchResult {
+  item: any;
+  kind: "skill" | "resource";
+  score: number;
+  reason: string;
+  summary?: string;
+  intentTags?: string[];
+}
+
 // AI 3 — Natural language skill/resource matching
-export async function matchSkillResource(query: string, societyId: string) {
+export async function matchSkillResource(query: string, societyId: string): Promise<MatchResult[]> {
   try {
-    const res = await apiFetch<any[]>("/ai/match-marketplace", {
+    const res = await apiFetch<MatchResult[]>("/ai/match-marketplace", {
       method: "POST",
       body: JSON.stringify({ query, societyId }),
     });
@@ -190,34 +199,49 @@ export async function matchSkillResource(query: string, societyId: string) {
   }
 
   const q = query.toLowerCase();
-  const skillHits = __mockState.skills
+  const words = q.split(/\s+/).filter(Boolean);
+
+  const skillHits: MatchResult[] = __mockState.skills
     .filter((s) => s.societyId === societyId && s.status === "approved")
-    .map((s) => ({
-      item: s,
-      kind: "skill" as const,
-      score:
-        (s.title.toLowerCase().includes(q) ? 3 : 0) +
-        (s.description.toLowerCase().includes(q) ? 2 : 0) +
-        s.tags.filter((t) => q.includes(t)).length,
-      reason: `Matches keywords in ${s.tags.join(", ")}`,
-    }));
-  const resHits = __mockState.resources
+    .map((s) => {
+      const titleMatch = s.title.toLowerCase().includes(q);
+      const descMatch = s.description.toLowerCase().includes(q);
+      const wordHits = words.filter((w) => s.title.toLowerCase().includes(w) || s.description.toLowerCase().includes(w));
+      const score = titleMatch ? 90 : descMatch ? 80 : wordHits.length > 0 ? 60 + wordHits.length * 10 : 0;
+      return {
+        item: s,
+        kind: "skill" as const,
+        score: Math.min(98, score),
+        reason: `Matches your intent for ${s.category} (${s.title})`,
+        summary: `Expert ${s.category} service: '${s.title}' offered by ${s.providerName} (${s.credits} Credits).`,
+        intentTags: [s.category, ...(s.tags || [])].slice(0, 3),
+      };
+    });
+
+  const resHits: MatchResult[] = __mockState.resources
     .filter((r) => r.societyId === societyId && r.status === "approved")
-    .map((r) => ({
-      item: r,
-      kind: "resource" as const,
-      score:
-        (r.name.toLowerCase().includes(q) ? 3 : 0) +
-        (r.description.toLowerCase().includes(q) ? 2 : 0) +
-        (q.includes(r.category.toLowerCase()) ? 1 : 0),
-      reason: `Resource in "${r.category}" that seems relevant`,
-    }));
+    .map((r) => {
+      const nameMatch = r.name.toLowerCase().includes(q);
+      const descMatch = r.description.toLowerCase().includes(q);
+      const wordHits = words.filter((w) => r.name.toLowerCase().includes(w) || r.description.toLowerCase().includes(w));
+      const score = nameMatch ? 90 : descMatch ? 80 : wordHits.length > 0 ? 60 + wordHits.length * 10 : 0;
+      return {
+        item: r,
+        kind: "resource" as const,
+        score: Math.min(98, score),
+        reason: `Community equipment in ${r.category} (${r.name})`,
+        summary: `Shared ${r.category} equipment: '${r.name}' available to borrow from ${r.ownerName} (${r.credits} Credits).`,
+        intentTags: [r.category, "Available to Borrow"],
+      };
+    });
+
   const all = [...skillHits, ...resHits]
     .filter((h) => h.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+    .slice(0, 8);
   return delay(all);
 }
+
 
 // AI 4 — Auto-tag & categorize new skill/resource
 export async function autoTag(text: string): Promise<{ category: string; tags: string[] }> {
@@ -319,5 +343,5 @@ export async function suggestVolunteers(eventId: string) {
   return delay(scoredResidents.slice(0, 4));
 }
 
-export type MatchResult = Awaited<ReturnType<typeof matchSkillResource>>[number];
 export type VolunteerSuggestion = Awaited<ReturnType<typeof suggestVolunteers>>[number];
+

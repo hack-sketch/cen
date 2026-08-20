@@ -365,23 +365,238 @@ def chatbot_query(
 
 
 
+STOPWORDS = {
+    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours",
+    "he", "him", "his", "she", "her", "hers", "it", "its", "they", "them", "their",
+    "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are",
+    "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does",
+    "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until",
+    "while", "of", "at", "by", "for", "with", "about", "against", "between", "into",
+    "through", "during", "before", "after", "above", "below", "to", "from", "up", "down",
+    "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here",
+    "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more",
+    "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so",
+    "than", "too", "very", "can", "will", "just", "don", "should", "now", "need", "want",
+    "looking", "someone", "help", "somebody", "find", "please", "service", "item", "tool",
+    "something", "anybody", "get", "like"
+}
+
+SYNONYM_ONTOLOGY = {
+    "Plumbing": ["plumb", "plumbing", "pipe", "pipes", "leak", "leaking", "leaky", "faucet", "sink", "tap", "bathroom", "drain", "water", "toilet", "plumber"],
+    "Electrical": ["electric", "electrical", "electrician", "wire", "wiring", "light", "switch", "socket", "fan", "power", "bulb", "appliance"],
+    "Tutoring": ["tutor", "tutoring", "teach", "teaching", "teacher", "lesson", "lessons", "math", "maths", "mathematics", "science", "english", "homework", "exam", "coding", "python", "study", "class", "classes", "learn"],
+    "Gardening": ["garden", "gardening", "gardener", "plant", "plants", "lawn", "mow", "mower", "grass", "tree", "trim", "flower", "yard", "outdoor", "landscape", "landscaping"],
+    "Wellness": ["yoga", "fitness", "workout", "gym", "health", "exercise", "train", "trainer", "meditation", "diet", "stretching", "wellness"],
+    "Music": ["guitar", "piano", "sing", "singing", "drums", "music", "musical", "instrument", "song", "vocal", "acoustic"],
+    "Tools": ["drill", "drilling", "hammer", "ladder", "wrench", "toolkit", "saw", "screw", "driver", "tools", "diy", "equipment", "hardware", "screwdriver"],
+    "Electronics": ["laptop", "pc", "computer", "phone", "camera", "tv", "screen", "lens", "tech", "gadget", "printer", "projector", "electronics"],
+    "Repair": ["fix", "fixing", "repair", "repairing", "mend", "maintenance", "assembly", "mount", "mounting", "broken", "service"],
+    "Vehicles": ["car", "bike", "bicycle", "cycle", "puncture", "mechanic", "tyre", "tire", "scooter", "brake", "oil"],
+    "Cleaning": ["clean", "cleaning", "wash", "washing", "mop", "sweep", "dust", "maid", "sanitize", "vacuum", "housekeeping"],
+    "Cooking": ["cook", "cooking", "bake", "baking", "chef", "meal", "food", "recipe", "catering", "cake", "kitchen"],
+}
+
+
 def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchItemResult]:
-    q = query.lower()
+    q_raw = query.strip()
+    q_lower = q_raw.lower()
+    
+    # 1. RETRIEVAL STEP (RAG): Retrieve all approved skills and resources in the user's society
+    skills = db.query(Skill).filter(Skill.society_id == society_id, Skill.status == "approved").all()
+    resources = db.query(Resource).filter(Resource.society_id == society_id, Resource.status == "approved").all()
+
+    skills_by_id = {s.id: s for s in skills}
+    resources_by_id = {r.id: r for r in resources}
+
+    # Prepare compact catalog for LLM Augmented Generation
+    catalog_items = []
+    for s in skills:
+        catalog_items.append({
+            "id": s.id,
+            "kind": "skill",
+            "title": s.title,
+            "category": s.category,
+            "providerName": s.provider_name,
+            "credits": s.credits,
+            "description": s.description,
+            "tags": s.tags,
+        })
+    for r in resources:
+        catalog_items.append({
+            "id": r.id,
+            "kind": "resource",
+            "title": r.name,
+            "category": r.category,
+            "ownerName": r.owner_name,
+            "credits": r.credits,
+            "description": r.description,
+            "available": r.available,
+        })
+
+    # 2. AUGMENTED GENERATION STEP (RAG): If Gemini LLM is active, perform true semantic intent reasoning
+    if catalog_items:
+        rag_prompt = (
+            f"You are CEN Assistant's semantic marketplace match and intent summarization engine.\n"
+            f"A resident in the community searched using everyday natural language:\n"
+            f"Query: \"{q_raw}\"\n\n"
+            f"Here is the live community database catalog of available skills and shared resources:\n"
+            f"{json.dumps(catalog_items, indent=2)}\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Intelligently parse the resident's underlying problem, desire, or intent (e.g. 'water leaking under bathroom sink' -> matches plumbing repair, 'need something to mount pictures' -> matches drill/hammer tools).\n"
+            "2. Identify the best matching catalog items (up to 8).\n"
+            "3. For each match, provide:\n"
+            "   - 'id': exact item ID from the catalog\n"
+            "   - 'kind': 'skill' or 'resource'\n"
+            "   - 'score': integer from 60 to 98 based on relevance\n"
+            "   - 'reason': concise explanation of why this item satisfies the resident's request\n"
+            "   - 'summary': a clear 1-2 sentence layman explanation of what is offered and how it helps\n"
+            "   - 'intentTags': array of 2-3 intent tags (e.g. ['Plumbing', 'Leak Repair', 'Home DIY'])\n\n"
+            "Return ONLY a JSON array of objects with keys: id, kind, score, reason, summary, intentTags.\n"
+            "If no items are relevant to the user query, return []."
+        )
+
+        llm_response = call_gemini_llm(prompt=rag_prompt)
+        if llm_response:
+            try:
+                json_match = re.search(r"\[.*\]", llm_response, re.DOTALL)
+                if json_match:
+                    parsed_matches = json.loads(json_match.group(0))
+                    if isinstance(parsed_matches, list) and len(parsed_matches) > 0:
+                        rag_results: List[MatchItemResult] = []
+                        for pm in parsed_matches:
+                            item_id = pm.get("id")
+                            kind = pm.get("kind", "skill")
+                            score = int(pm.get("score", 85))
+                            reason = str(pm.get("reason", "Semantic intent match"))
+                            summary = str(pm.get("summary", ""))
+                            intent_tags = pm.get("intentTags", [])
+                            if not isinstance(intent_tags, list):
+                                intent_tags = [str(intent_tags)]
+
+                            if kind == "skill" and item_id in skills_by_id:
+                                s = skills_by_id[item_id]
+                                item_dict = {
+                                    "id": s.id,
+                                    "title": s.title,
+                                    "category": s.category,
+                                    "providerId": s.provider_id,
+                                    "providerName": s.provider_name,
+                                    "credits": s.credits,
+                                    "description": s.description,
+                                    "status": s.status,
+                                    "tags": [t.strip() for t in s.tags.split(",") if t.strip()] if isinstance(s.tags, str) else [],
+                                    "societyId": s.society_id,
+                                    "summary": summary or f"Expert {s.category} service: '{s.title}' offered by {s.provider_name}.",
+                                    "intentTags": intent_tags or [s.category, "Skill Exchange"],
+                                }
+                                rag_results.append(
+                                    MatchItemResult(
+                                        item=item_dict,
+                                        kind="skill",
+                                        score=min(99, max(50, score)),
+                                        reason=reason,
+                                        summary=summary or item_dict["summary"],
+                                        intent_tags=intent_tags or item_dict["intentTags"],
+                                    )
+                                )
+                            elif kind == "resource" and item_id in resources_by_id:
+                                r = resources_by_id[item_id]
+                                item_dict = {
+                                    "id": r.id,
+                                    "name": r.name,
+                                    "category": r.category,
+                                    "ownerId": r.owner_id,
+                                    "ownerName": r.owner_name,
+                                    "available": r.available,
+                                    "credits": r.credits,
+                                    "status": r.status,
+                                    "description": r.description,
+                                    "societyId": r.society_id,
+                                    "summary": summary or f"Shared {r.category} equipment: '{r.name}' available to borrow from {r.owner_name}.",
+                                    "intentTags": intent_tags or [r.category, "Shared Tool"],
+                                }
+                                rag_results.append(
+                                    MatchItemResult(
+                                        item=item_dict,
+                                        kind="resource",
+                                        score=min(99, max(50, score)),
+                                        reason=reason,
+                                        summary=summary or item_dict["summary"],
+                                        intent_tags=intent_tags or item_dict["intentTags"],
+                                    )
+                                )
+
+                        if rag_results:
+                            rag_results.sort(key=lambda x: x.score, reverse=True)
+                            return rag_results[:8]
+            except Exception as e:
+                print(f"[Gemini RAG Matcher Exception]: {e}")
+
+    # 3. HIGH-PRECISION HEURISTIC & SYNONYM INTENT ENGINE (Fallback if offline)
+    # Extract query tokens excluding stopwords
+    words = re.findall(r"\b[a-z0-9]+\b", q_lower)
+    meaningful_tokens = [w for w in words if w not in STOPWORDS and len(w) > 1]
+    if not meaningful_tokens:
+        meaningful_tokens = [w for w in words if len(w) > 1]
+
+    # Detect relevant intent categories from ontology
+    matched_categories = set()
+    for cat, synonyms in SYNONYM_ONTOLOGY.items():
+        if any(token in synonyms for token in meaningful_tokens) or any(s in q_lower for s in synonyms):
+            matched_categories.add(cat)
+
     results: List[MatchItemResult] = []
 
-    skills = db.query(Skill).filter(Skill.society_id == society_id, Skill.status == "approved").all()
     for s in skills:
+        s_title_lower = s.title.lower()
+        s_desc_lower = s.description.lower()
+        s_cat_lower = s.category.lower()
+        tags_list = [t.strip().lower() for t in s.tags.split(",") if t.strip()] if isinstance(s.tags, str) else []
+
         score = 0
-        if q in s.title.lower():
-            score += 3
-        if q in s.description.lower():
-            score += 2
-        tags_list = s.tags.split(",") if isinstance(s.tags, str) else []
-        for t in tags_list:
-            if t.strip() and t.strip().lower() in q:
-                score += 2
+        matched_reasons = []
+
+        # Exact query match
+        if q_lower in s_title_lower:
+            score += 45
+            matched_reasons.append(f"Title matches '{q_raw}'")
+        elif any(t in s_title_lower for t in meaningful_tokens):
+            matching_title_tokens = [t for t in meaningful_tokens if t in s_title_lower]
+            score += 25 * len(matching_title_tokens)
+            matched_reasons.append(f"Keywords in title: {', '.join(matching_title_tokens)}")
+
+        if q_lower in s_desc_lower:
+            score += 30
+            matched_reasons.append("Exact phrase in description")
+        else:
+            matching_desc_tokens = [t for t in meaningful_tokens if t in s_desc_lower]
+            if matching_desc_tokens:
+                score += 15 * len(matching_desc_tokens)
+                matched_reasons.append(f"Description matches: {', '.join(matching_desc_tokens[:3])}")
+
+        # Category and synonym match
+        if s.category in matched_categories or s_cat_lower in q_lower or any(t in s_cat_lower for t in meaningful_tokens):
+            score += 25
+            matched_reasons.append(f"Category '{s.category}' matches your intent")
+
+        # Tags match
+        matching_tags = [t for t in tags_list if t in q_lower or any(token in t for token in meaningful_tokens)]
+        if matching_tags:
+            score += 20 * len(matching_tags)
+            matched_reasons.append(f"Tags match: {', '.join(matching_tags)}")
 
         if score > 0:
+            summary = f"Expert {s.category} service: '{s.title}' offered by {s.provider_name} ({s.credits} Credits). {s.description.strip()}"
+            if len(summary) > 135:
+                summary = summary[:132] + "..."
+
+            intent_tags = list(dict.fromkeys([s.category, *matching_tags, *[c for c in matched_categories if c != s.category]]))[:3]
+            if not intent_tags:
+                intent_tags = [s.category, "Skill Exchange"]
+
+            norm_score = min(98, max(55, score))
+            reason = " · ".join(matched_reasons[:2]) if matched_reasons else f"Matches your search for {s.category}"
+
             item_dict = {
                 "id": s.id,
                 "title": s.title,
@@ -391,29 +606,66 @@ def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchIte
                 "credits": s.credits,
                 "description": s.description,
                 "status": s.status,
-                "tags": [t.strip() for t in tags_list if t.strip()],
+                "tags": [t.strip() for t in s.tags.split(",") if t.strip()] if isinstance(s.tags, str) else [],
                 "societyId": s.society_id,
+                "summary": summary,
+                "intentTags": intent_tags,
             }
+
             results.append(
                 MatchItemResult(
                     item=item_dict,
                     kind="skill",
-                    score=score,
-                    reason=f"Matches keywords in skill '{s.title}'",
+                    score=norm_score,
+                    reason=reason,
+                    summary=summary,
+                    intent_tags=intent_tags,
                 )
             )
 
+    # Query resources in society
     resources = db.query(Resource).filter(Resource.society_id == society_id, Resource.status == "approved").all()
     for r in resources:
+        r_name_lower = r.name.lower()
+        r_desc_lower = r.description.lower()
+        r_cat_lower = r.category.lower()
+
         score = 0
-        if q in r.name.lower():
-            score += 3
-        if q in r.description.lower():
-            score += 2
-        if q in r.category.lower():
-            score += 1
+        matched_reasons = []
+
+        # Exact query match
+        if q_lower in r_name_lower:
+            score += 45
+            matched_reasons.append(f"Resource name matches '{q_raw}'")
+        elif any(t in r_name_lower for t in meaningful_tokens):
+            matching_name_tokens = [t for t in meaningful_tokens if t in r_name_lower]
+            score += 25 * len(matching_name_tokens)
+            matched_reasons.append(f"Name matches: {', '.join(matching_name_tokens)}")
+
+        if q_lower in r_desc_lower:
+            score += 30
+            matched_reasons.append("Exact phrase in item description")
+        else:
+            matching_desc_tokens = [t for t in meaningful_tokens if t in r_desc_lower]
+            if matching_desc_tokens:
+                score += 15 * len(matching_desc_tokens)
+                matched_reasons.append(f"Description matches: {', '.join(matching_desc_tokens[:3])}")
+
+        # Category and synonym match
+        if r.category in matched_categories or r_cat_lower in q_lower or any(t in r_cat_lower for t in meaningful_tokens):
+            score += 25
+            matched_reasons.append(f"Category '{r.category}' fits your requirements")
 
         if score > 0:
+            summary = f"Shared {r.category} equipment: '{r.name}' available to borrow from {r.owner_name} ({r.credits} Credits). {r.description.strip()}"
+            if len(summary) > 135:
+                summary = summary[:132] + "..."
+
+            intent_tags = list(dict.fromkeys([r.category, "Available to Borrow", *[c for c in matched_categories if c != r.category]]))[:3]
+
+            norm_score = min(98, max(55, score))
+            reason = " · ".join(matched_reasons[:2]) if matched_reasons else f"Available resource in {r.category}"
+
             item_dict = {
                 "id": r.id,
                 "name": r.name,
@@ -425,18 +677,24 @@ def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchIte
                 "status": r.status,
                 "description": r.description,
                 "societyId": r.society_id,
+                "summary": summary,
+                "intentTags": intent_tags,
             }
+
             results.append(
                 MatchItemResult(
                     item=item_dict,
                     kind="resource",
-                    score=score,
-                    reason=f"Resource in category '{r.category}'",
+                    score=norm_score,
+                    reason=reason,
+                    summary=summary,
+                    intent_tags=intent_tags,
                 )
             )
 
     results.sort(key=lambda x: x.score, reverse=True)
-    return results[:6]
+    return results[:8]
+
 
 
 def auto_tag(text: str) -> AutoTagResult:

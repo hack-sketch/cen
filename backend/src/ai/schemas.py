@@ -50,11 +50,14 @@ class MatchItemResult(BaseModel):
     kind: str  # skill | resource
     score: int
     reason: str
+    summary: Optional[str] = None
+    intent_tags: Optional[List[str]] = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
     )
+
 
 
 class AutoTagPayload(BaseModel):

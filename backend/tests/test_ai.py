@@ -47,11 +47,42 @@ def test_match_marketplace(client, db_session):
     db_session.add(resource)
     db_session.commit()
 
+    # 1. Exact keyword search
     resp = client.post("/api/v1/ai/match-marketplace", json={"query": "python", "society_id": soc.id})
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) >= 1
     assert data[0]["item"]["title"] == "Python Tutoring"
+    assert "summary" in data[0]
+    assert data[0]["summary"] is not None
+    assert "intentTags" in data[0]
+
+    # 2. Descriptive natural language layman query for skills
+    layman_skill_resp = client.post(
+        "/api/v1/ai/match-marketplace",
+        json={"query": "I want someone to help teach coding and python basics to my children", "society_id": soc.id},
+    )
+    assert layman_skill_resp.status_code == 200
+    layman_skill_data = layman_skill_resp.json()
+    assert len(layman_skill_data) >= 1
+    assert layman_skill_data[0]["kind"] == "skill"
+    assert layman_skill_data[0]["item"]["title"] == "Python Tutoring"
+    assert len(layman_skill_data[0]["summary"]) > 0
+    assert len(layman_skill_data[0]["intentTags"]) > 0
+
+    # 3. Descriptive natural language layman query for resources
+    layman_res_resp = client.post(
+        "/api/v1/ai/match-marketplace",
+        json={"query": "Looking for heavy equipment to mount shelves and drill screws into the wall", "society_id": soc.id},
+    )
+    assert layman_res_resp.status_code == 200
+    layman_res_data = layman_res_resp.json()
+    assert len(layman_res_data) >= 1
+    assert layman_res_data[0]["kind"] == "resource"
+    assert layman_res_data[0]["item"]["name"] == "Power Drill Tool"
+    assert "drill" in layman_res_data[0]["summary"].lower() or len(layman_res_data[0]["summary"]) > 0
+
+
 
 
 def test_suggest_volunteers(client, db_session):
