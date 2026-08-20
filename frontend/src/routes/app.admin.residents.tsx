@@ -9,7 +9,11 @@ import { householdService, userService } from "@/services";
 import { useAuth } from "@/lib/auth";
 import { useState } from "react";
 import { toast } from "sonner";
-import { UserX, UserCheck, AlertCircle, Home, Users, Star, Crown } from "lucide-react";
+import { UserX, UserCheck, AlertCircle, Home, Users, Star, Crown, ShieldCheck, CheckCircle2, Clock, XCircle, Eye, FileCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+
+
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,8 +34,10 @@ function Page() {
   const [q, setQ] = useState("");
   const [viewMode, setViewMode] = useState<"grouped" | "table">("grouped");
   const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string } | null>(null);
+  const [viewingIdDoc, setViewingIdDoc] = useState<any>(null);
   
   const sid = user?.societyId || "soc-demo";
+
   const list = useQuery({ queryKey: ["allRes", sid], queryFn: () => userService.listBySociety(sid) });
   const householdsQuery = useQuery({ queryKey: ["hh", sid], queryFn: () => householdService.listBySociety(sid) });
 
@@ -196,6 +202,7 @@ function Page() {
                     <th className="p-3 whitespace-nowrap font-bold text-ink">Household Unit</th>
                     <th className="p-3 whitespace-nowrap font-bold text-ink">Resident Role / Slot Lead</th>
                     <th className="p-3 whitespace-nowrap font-bold text-ink">Status</th>
+                    <th className="p-3 whitespace-nowrap font-bold text-ink">ID Verification</th>
                     <th className="p-3 text-right whitespace-nowrap font-bold text-ink">Credits</th>
                     <th className="p-3 text-right whitespace-nowrap font-bold text-ink">Actions</th>
                   </tr>
@@ -251,6 +258,67 @@ function Page() {
                             {isActive ? "Active" : "Deactivated"}
                           </Badge>
                         </td>
+                        <td className="p-3 whitespace-nowrap">
+                          {r.role === "admin" || r.role === "owner" ? (
+                            <Badge className="bg-emerald-50 text-emerald-800 border-emerald-300 border text-[9px] font-bold">
+                              <ShieldCheck className="h-3 w-3 mr-1 text-emerald-600" /> Admin
+                            </Badge>
+                          ) : r.idProofVerified || r.verificationStatus === "verified" ? (
+                            <div className="flex items-center gap-1.5">
+                              <Badge className="bg-emerald-50 text-emerald-800 border-emerald-300 border text-[9px] font-bold">
+                                <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-600" /> Verified
+                              </Badge>
+                              {r.idProofUrl && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setViewingIdDoc(r)}
+                                  className="h-6 text-[10px] px-1.5 text-slate-600 hover:text-deep-forest hover:bg-panel cursor-pointer"
+                                  title="View uploaded ID document"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" /> View ID
+                                </Button>
+                              )}
+                            </div>
+                          ) : r.idProofUploaded || r.verificationStatus === "pending" ? (
+                            <div className="flex items-center gap-1.5">
+                              <Badge className="bg-amber-50 text-amber-900 border-amber-300 border text-[9px] font-bold">
+                                <Clock className="h-3 w-3 mr-1 text-amber-600" /> In Review
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setViewingIdDoc(r)}
+                                className="h-6 text-[10px] px-2 bg-amber-500/10 border-amber-300 hover:bg-amber-100 text-amber-900 font-bold cursor-pointer flex items-center gap-1"
+                                title="Inspect submitted document"
+                              >
+                                <Eye className="h-3 w-3" /> Inspect
+                              </Button>
+                              {(user?.role === "admin" || user?.role === "owner" || user?.canManageOnboarding) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={async () => {
+                                    try {
+                                      await userService.verifyIdProof(r.id, true);
+                                      qc.invalidateQueries({ queryKey: ["allRes", sid] });
+                                      toast.success(`Verified ID proof for ${r.name}`);
+                                    } catch (err: any) {
+                                      toast.error(err.message || "Failed to verify ID proof");
+                                    }
+                                  }}
+                                  className="h-6 text-[9px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                                >
+                                  Verify
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <Badge className="bg-rose-50 text-rose-800 border-rose-300 border text-[9px] font-bold">
+                              <XCircle className="h-3 w-3 mr-1 text-rose-600" /> Unverified
+                            </Badge>
+                          )}
+                        </td>
                         <td className="p-3 text-right whitespace-nowrap font-semibold text-ink">{r.creditBalance}</td>
                         <td className="p-3 text-right whitespace-nowrap">
                           {isActive ? (
@@ -296,6 +364,102 @@ function Page() {
           </CardContent>
         </Card>
       )}
+
+      {/* ID Document Inspection Dialog */}
+      <Dialog open={!!viewingIdDoc} onOpenChange={(open) => !open && setViewingIdDoc(null)}>
+        <DialogContent className="sm:max-w-xl w-[95vw] border-line/60 rounded-2xl p-4 sm:p-6 bg-white">
+          <DialogHeader className="pb-3 border-b border-line/35">
+            <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+              <FileCheck className="h-5 w-5 text-deep-forest" />
+              Resident Identity Document Inspection
+            </DialogTitle>
+            <DialogDescription className="text-xs text-on-surface-variant">
+              Review submitted identity proof document for {viewingIdDoc?.name} (Household: {viewingIdDoc?.householdId || "Unassigned"}).
+            </DialogDescription>
+          </DialogHeader>
+
+          {viewingIdDoc && (() => {
+            const isImage = viewingIdDoc.idProofUrl && (
+              viewingIdDoc.idProofUrl.startsWith("data:") || 
+              viewingIdDoc.idProofUrl.startsWith("http") || 
+              viewingIdDoc.idProofUrl.startsWith("blob:")
+            );
+            const filename = viewingIdDoc.idProofUrl ? viewingIdDoc.idProofUrl.replace(/^mock:\/\//, "") : "Submitted_ID_Document.pdf";
+            const isVerified = viewingIdDoc.idProofVerified || viewingIdDoc.verificationStatus === "verified";
+
+            return (
+              <div className="space-y-4 pt-2">
+                <div className="border border-line rounded-xl bg-panel/30 p-3 flex flex-col items-center justify-center shadow-inner min-h-[180px] max-h-[260px] overflow-hidden">
+                  {isImage ? (
+                    <img src={viewingIdDoc.idProofUrl} alt="Uploaded Resident ID Proof" className="max-h-56 w-full object-contain rounded-lg shadow-sm border bg-white" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-center p-4 bg-white rounded-xl border border-line shadow-sm w-full max-w-sm">
+                      <FileCheck className="h-10 w-10 text-deep-forest" />
+                      <span className="text-xs font-bold text-ink truncate max-w-[240px]">{filename}</span>
+                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Resident Uploaded File</Badge>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-line/60 bg-slate-50/50 space-y-2 text-xs">
+                  <div className="flex justify-between items-center pb-2 border-b border-line/35">
+                    <span className="text-on-surface-variant font-medium">Resident Name:</span>
+                    <span className="font-bold text-ink">{viewingIdDoc.name}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-line/35">
+                    <span className="text-on-surface-variant font-medium">Household Unit:</span>
+                    <span className="font-bold text-deep-forest">{viewingIdDoc.householdId || "Unassigned"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-on-surface-variant font-medium">Current Status:</span>
+                    <Badge className={isVerified ? "bg-emerald-50 border-emerald-200 text-emerald-800 text-[10px] font-bold px-2 py-0.5 border" : "bg-amber-50 border-amber-200 text-amber-800 text-[10px] font-bold px-2 py-0.5 border"}>
+                      {isVerified ? "✓ Verified Resident" : "⏳ Verification Pending"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {(user?.role === "admin" || user?.role === "owner" || user?.canManageOnboarding) && (
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={async () => {
+                        const targetId = viewingIdDoc.id;
+                        try {
+                          await userService.verifyIdProof(targetId, true);
+                          qc.invalidateQueries({ queryKey: ["allRes", sid] });
+                          toast.success(`Verified ID proof for ${viewingIdDoc.name}`);
+                          setViewingIdDoc(null);
+                        } catch (err: any) {
+                          toast.error(err.message || "Failed to verify ID proof");
+                        }
+                      }}
+                      className="flex-1 bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg cursor-pointer shadow-sm active:scale-98 transition-all"
+                    >
+                      Approve & Verify ID
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        const targetId = viewingIdDoc.id;
+                        try {
+                          await userService.verifyIdProof(targetId, false);
+                          qc.invalidateQueries({ queryKey: ["allRes", sid] });
+                          toast.success(`Rejected ID proof. ${viewingIdDoc.name} can now re-upload.`);
+                          setViewingIdDoc(null);
+                        } catch (err: any) {
+                          toast.error(err.message || "Failed to reject ID proof");
+                        }
+                      }}
+                      className="flex-1 border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold text-xs h-10 rounded-lg cursor-pointer active:scale-98 transition-all"
+                    >
+                      Reject / Request Re-upload
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Deactivation Pop-up Dialog */}
       <AlertDialog open={!!deactivateTarget} onOpenChange={(open) => !open && setDeactivateTarget(null)}>

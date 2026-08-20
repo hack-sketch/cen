@@ -107,9 +107,12 @@ def verify_user_id_proof(db: Session, user_id: str, verified: bool) -> User:
     user.id_proof_verified = verified
     if verified:
         user.id_proof_uploaded = True
+    else:
+        user.id_proof_uploaded = False
     db.commit()
     db.refresh(user)
     return user
+
 
 
 def leave_society(db: Session, user_id: str) -> User:

@@ -330,18 +330,146 @@ export async function suggestVolunteers(eventId: string) {
   const ev = __mockState.events.find((e) => e.id === eventId);
   if (!ev) return delay([]);
 
+  const existingVolunteers = Array.isArray(ev.volunteers) ? ev.volunteers : [];
   const residents = __mockState.users.filter(
-    (u) => u.societyId === ev.societyId && u.role === "resident" && !ev.volunteers.includes(u.id),
+    (u) => u.societyId === ev.societyId && u.role === "resident" && !existingVolunteers.includes(u.id),
   );
 
-  const scoredResidents = residents.map((u) => ({
-    user: u,
-    score: 85,
-    reason: "Active community member",
-  }));
+  const eventWords = (ev.title + " " + (ev.description || "")).toLowerCase().split(/\W+/).filter(Boolean);
 
-  return delay(scoredResidents.slice(0, 4));
+  const scoredResidents = residents.map((u, idx) => {
+    let score = 65 + (idx % 3) * 4;
+    const reasons: string[] = [];
+
+    const interests = Array.isArray(u.interests) ? u.interests : [];
+    const matchedInterests = interests.filter((i) =>
+      eventWords.some((w) => i.toLowerCase().includes(w) || w.includes(i.toLowerCase()))
+    );
+    if (matchedInterests.length > 0) {
+      score += 18;
+      reasons.push(`Interest match: ${matchedInterests.slice(0, 2).join(", ")}`);
+    }
+
+    if (u.offeredSkillsText) {
+      const skillWords = u.offeredSkillsText.toLowerCase().split(/\W+/).filter(Boolean);
+      if (skillWords.some((w) => eventWords.includes(w))) {
+        score += 15;
+        reasons.push("Offered skill overlap");
+      }
+    }
+
+    if (u.volunteerInterest === "yes") {
+      score += 12;
+      reasons.push("High volunteer availability");
+    } else if (u.volunteerInterest === "weekends") {
+      score += 8;
+      reasons.push("Weekend drive preference");
+    }
+
+    if (reasons.length === 0) {
+      reasons.push("Active community resident");
+    }
+
+    return {
+      user: u,
+      score: Math.min(98, Math.max(60, score)),
+      reason: reasons.join(" · "),
+    };
+  });
+
+  scoredResidents.sort((a, b) => b.score - a.score);
+  return delay(scoredResidents.slice(0, 5));
 }
 
+
 export type VolunteerSuggestion = Awaited<ReturnType<typeof suggestVolunteers>>[number];
+
+// AI 8 — Check event clash
+export async function checkEventClash(
+  title: string,
+  description: string,
+  startTime: string,
+  endTime: string,
+  societyId: string
+): Promise<{ hasClash: boolean; reason: string }> {
+  try {
+    const res = await apiFetch<{ hasClash: boolean; reason: string }>("/ai/check-event-clash", {
+      method: "POST",
+      body: JSON.stringify({
+        title,
+        description,
+        startTime,
+        endTime,
+        societyId,
+      }),
+    });
+    if (res) return res;
+  } catch (err) {
+    console.warn("[AI API Notice] checkEventClash fallback:", err);
+  }
+  return { hasClash: false, reason: "No clashes detected in the schedule." };
+}
+
+// AI 9 — Coordinator event suggestions based on survey data
+export async function getCoordinatorEventSuggestions(): Promise<
+  { title: string; description: string; reason: string }[]
+> {
+  try {
+    const res = await apiFetch<{ title: string; description: string; reason: string }[]>(
+      "/ai/coordinator-event-suggestions"
+    );
+    if (Array.isArray(res) && res.length > 0) return res;
+  } catch (err) {
+    console.warn("[AI API Notice] getCoordinatorEventSuggestions fallback:", err);
+  }
+  return [
+    {
+      title: "Community Social Mixer",
+      description: "An informal evening gathering to help neighbors get to know each other.",
+      reason: "Engages a broad cross-section of residents across all units.",
+    },
+    {
+      title: "Neighborhood Skill Share Workshop",
+      description: "Interactive mini-sessions where neighbors demonstrate practical skills.",
+      reason: "Aligns with active resident skill-sharing interests.",
+    },
+    {
+      title: "Society Greenery & Planting Drive",
+      description: "Hands-on morning planting flowers and shrubs in common garden beds.",
+      reason: "Fosters collective civic pride and volunteer participation.",
+    },
+  ];
+}
+
+// AI 10 — Resident personalized suggestions
+export async function getResidentSuggestions(): Promise<{
+  skillSuggestions: { id?: string; title: string; providerName?: string; credits?: number; category?: string; reason: string }[];
+  volunteerSuggestions: { id?: string; title: string; reason: string }[];
+}> {
+  try {
+    const res = await apiFetch<{
+      skillSuggestions: any[];
+      volunteerSuggestions: any[];
+    }>("/ai/resident-suggestions");
+    if (res && (res.skillSuggestions || res.volunteerSuggestions)) return res;
+  } catch (err) {
+    console.warn("[AI API Notice] getResidentSuggestions fallback:", err);
+  }
+  return { skillSuggestions: [], volunteerSuggestions: [] };
+}
+
+// AI 11 — Resident personalized community digest
+export async function getUserSummary(): Promise<{ summary: string; generatedAt?: string | null }> {
+  try {
+    const res = await apiFetch<{ summary: string; generatedAt?: string | null }>("/users/me/summary");
+    if (res && res.summary) return res;
+  } catch (err) {
+    console.warn("[AI API Notice] getUserSummary fallback:", err);
+  }
+  return {
+    summary: "Welcome to your community! Explore skills and equipment in the society marketplace or volunteer for upcoming events.",
+    generatedAt: null,
+  };
+}
+
 

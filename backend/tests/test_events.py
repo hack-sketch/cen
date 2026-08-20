@@ -151,3 +151,156 @@ def test_direct_event_leave(client, db_session):
 
     db_session.refresh(event)
     assert resident.id not in event.volunteers
+
+
+def test_event_update_complete_and_delete_lifecycle(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.events.models import EventItem
+
+    admin = create_user(
+        db_session,
+        UserCreate(name="Event Coordinator Admin", email="evadmin@cen.app", password="password123"),
+        role="admin",
+    )
+    soc = Society(name="Event Manage Society", address="10 Manage Way", admin_id=admin.id, coordinator_count=2, key="MNG-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    admin.society_id = soc.id
+    db_session.commit()
+
+    login_resp = client.post("/api/v1/auth/login", json={"email": "evadmin@cen.app", "password": "password123"})
+    token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create Event
+    create_resp = client.post(
+        "/api/v1/events",
+        json={
+            "title": "Initial Community Cleanup",
+            "description": "Clean common areas and planting",
+            "date": "2026-10-01",
+            "startTime": "2026-10-01T09:00:00Z",
+            "endTime": "2026-10-01T12:00:00Z",
+            "volunteersNeeded": 5,
+            "color": "#d1fae5",
+            "textColor": "#065f46",
+        },
+        headers=headers,
+    )
+    assert create_resp.status_code == 201
+    ev_data = create_resp.json()
+    event_id = ev_data["id"]
+
+    # 2. Update Event Date & Title
+    patch_resp = client.patch(
+        f"/api/v1/events/{event_id}",
+        json={
+            "title": "Autumn Park Cleanup & Solar Demo",
+            "date": "2026-10-05",
+            "volunteersNeeded": 8,
+            "color": "#fef3c7",
+        },
+        headers=headers,
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["title"] == "Autumn Park Cleanup & Solar Demo"
+    assert patch_resp.json()["date"] == "2026-10-05"
+    assert patch_resp.json()["volunteersNeeded"] == 8
+    assert patch_resp.json()["color"] == "#fef3c7"
+
+    # 3. Mark Event Complete
+    complete_resp = client.post(f"/api/v1/events/{event_id}/complete", headers=headers)
+    assert complete_resp.status_code == 200
+    assert complete_resp.json()["status"] == "completed"
+
+    # 4. Delete Event
+    del_resp = client.delete(f"/api/v1/events/{event_id}", headers=headers)
+    assert del_resp.status_code == 200
+
+    # 5. Verify Event is deleted
+    list_resp = client.get(f"/api/v1/events?society_id={soc.id}", headers=headers)
+    assert not any(e["id"] == event_id for e in list_resp.json())
+
+
+def test_volunteer_rejection_with_reason_and_reinvite_lifecycle(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.events.models import EventItem
+
+    admin = create_user(
+        db_session,
+        UserCreate(name="Event Host Admin", email="hostadmin@cen.app", password="password123"),
+        role="admin",
+    )
+    soc = Society(name="Rejection Test Society", address="10 Civic Center", admin_id=admin.id, coordinator_count=2, key="REJ-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    admin.society_id = soc.id
+    db_session.commit()
+
+    resident = create_user(
+        db_session,
+        UserCreate(name="Volunteer Applicant", email="applicant@cen.app", password="password123"),
+        role="resident",
+    )
+    resident.society_id = soc.id
+    db_session.commit()
+
+    # Create event
+    event = EventItem(
+        title="Community Art Workshop",
+        description="Setting up paints and canvases",
+        date="2026-11-15",
+        created_by_coordinator_id=admin.id,
+        volunteers_needed=2,
+        society_id=soc.id,
+    )
+    db_session.add(event)
+    db_session.commit()
+
+    # Resident requests to volunteer
+    res_login = client.post("/api/v1/auth/login", json={"email": "applicant@cen.app", "password": "password123"})
+    res_token = res_login.json().get("accessToken") or res_login.json().get("access_token")
+    res_headers = {"Authorization": f"Bearer {res_token}"}
+
+    req_resp = client.post(f"/api/v1/events/{event.id}/volunteer", headers=res_headers)
+    assert req_resp.status_code == 201
+    req_id = req_resp.json()["id"]
+    assert req_resp.json()["status"] == "pending"
+
+    # Coordinator rejects with reason
+    admin_login = client.post("/api/v1/auth/login", json={"email": "hostadmin@cen.app", "password": "password123"})
+    admin_token = admin_login.json().get("accessToken") or admin_login.json().get("access_token")
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    rej_resp = client.post(
+        f"/api/v1/events/volunteer-requests/{req_id}/reject",
+        json={"rejectionReason": "Volunteer capacity reached for this shift"},
+        headers=admin_headers,
+    )
+    assert rej_resp.status_code == 200
+    assert rej_resp.json()["status"] == "rejected"
+    assert rej_resp.json()["rejectionReason"] == "Volunteer capacity reached for this shift"
+
+    # Coordinator later re-invites applicant (slots opened up)
+    reinvite_resp = client.post(
+        f"/api/v1/events/{event.id}/invite",
+        json={"residentId": resident.id},
+        headers=admin_headers,
+    )
+    assert reinvite_resp.status_code == 201
+    assert reinvite_resp.json()["status"] == "pending"
+    assert reinvite_resp.json()["type"] == "coordinator-invited"
+    assert reinvite_resp.json()["rejectionReason"] is None
+
+    # Resident accepts invitation
+    acc_resp = client.post(f"/api/v1/events/volunteer-requests/{req_id}/approve", headers=res_headers)
+    assert acc_resp.status_code == 200
+    assert acc_resp.json()["status"] == "approved"
+
+

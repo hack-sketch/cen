@@ -12,7 +12,12 @@ from src.ai.schemas import (
     MatchItemResult,
     VolunteerSuggestionResult,
     SummarizeNoticeResult,
+    CheckEventClashResult,
+    CoordinatorEventSuggestion,
+    ResidentSuggestionsResult,
 )
+
+
 from src.config import settings
 from src.events.models import EventItem
 from src.marketplace.models import Resource, Skill
@@ -793,33 +798,82 @@ def suggest_volunteers(db: Session, event_id: str) -> List[VolunteerSuggestionRe
 
     residents = (
         db.query(User)
-        .filter(User.society_id == ev.society_id, User.role == "resident")
+        .filter(User.society_id == ev.society_id, User.role == "resident", User.is_active == True)
         .all()
     )
+
+    if not residents:
+        return []
+
+    # Extract keywords from event title and description
+    event_text = f"{ev.title} {ev.description or ''}".lower()
+    event_words = set(re.findall(r"[a-z0-9]+", event_text))
 
     results: List[VolunteerSuggestionResult] = []
     for u in residents:
         if u.id in existing_volunteers:
             continue
 
-        score = 60
-        reasons = ["Active community member"]
+        base_score = 65
+        reasons: List[str] = []
 
+        # Parse user interests
+        user_interests = []
+        if u.interests:
+            try:
+                import json
+                user_interests = json.loads(u.interests) if u.interests.startswith("[") else [i.strip() for i in u.interests.split(",") if i.strip()]
+            except Exception:
+                user_interests = [i.strip() for i in u.interests.split(",") if i.strip()]
+
+        matched_interests = []
+        for interest in user_interests:
+            int_words = set(re.findall(r"[a-z0-9]+", interest.lower()))
+            if int_words & event_words:
+                matched_interests.append(interest)
+
+        if matched_interests:
+            base_score += min(20, len(matched_interests) * 10)
+            reasons.append(f"Interest match: {', '.join(matched_interests[:2])}")
+
+        # Check offered skills
+        if u.offered_skills_text:
+            skill_words = set(re.findall(r"[a-z0-9]+", u.offered_skills_text.lower()))
+            common_skills = skill_words & event_words
+            if common_skills:
+                base_score += 15
+                reasons.append("Relevant offered skill match")
+
+        # Check volunteer preference
         if u.volunteer_interest == "yes":
-            score += 25
+            base_score += 15
             reasons.append("High volunteer availability")
+        elif u.volunteer_interest == "weekends":
+            base_score += 10
+            reasons.append("Weekend volunteering preference")
 
+
+        if not reasons:
+            reasons.append("Active community resident")
+
+        # Deterministic micro-variance for unique realistic score spread per resident
+        import hashlib
+        variance = int(hashlib.md5(f"{ev.id}:{u.id}".encode()).hexdigest()[:4], 16) % 7
+        final_score = min(98, max(50, base_score + variance))
         user_resp = UserResponse.model_validate(u)
         results.append(
             VolunteerSuggestionResult(
                 user=user_resp,
-                score=min(99, score),
+                score=final_score,
                 reason=" · ".join(reasons),
             )
         )
 
+
+    # Sort descending by match score
     results.sort(key=lambda x: x.score, reverse=True)
-    return results[:4]
+    return results[:5]
+
 
 
 def summarize_notice(content: str) -> SummarizeNoticeResult:
@@ -841,4 +895,215 @@ def summarize_notice(content: str) -> SummarizeNoticeResult:
     if not first_two:
         first_two = "Community Announcement"
     return SummarizeNoticeResult(summary=f"Notice summary: {first_two}")
+
+
+def check_event_clash(db: Session, title: str, description: str, start_time: str, end_time: str, society_id: str) -> CheckEventClashResult:
+    from src.events.models import EventItem
+    from datetime import datetime
+
+    try:
+        st = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+        et = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+    except Exception:
+        return CheckEventClashResult(has_clash=False, reason="Invalid date format.")
+
+    events = db.query(EventItem).filter(EventItem.society_id == society_id, EventItem.status == "upcoming").all()
+    overlapping = []
+    for e in events:
+        try:
+            if e.start_time and e.end_time:
+                est = datetime.fromisoformat(e.start_time.replace('Z', '+00:00'))
+                eet = datetime.fromisoformat(e.end_time.replace('Z', '+00:00'))
+                if (st <= eet and et >= est):
+                    overlapping.append(e)
+            elif e.date:
+                # If single date match
+                if e.date == start_time[:10]:
+                    overlapping.append(e)
+        except Exception:
+            continue
+
+    if not overlapping:
+        return CheckEventClashResult(has_clash=False, reason="No clashing events found in the schedule.")
+
+    context = "\n".join([f"- '{e.title}' ({e.start_time or e.date} to {e.end_time or e.date})" for e in overlapping])
+    prompt = (
+        f"The coordinator wants to schedule '{title}' from {start_time} to {end_time}.\n"
+        f"Description: {description}\n\n"
+        f"The following existing events overlap during this period:\n{context}\n\n"
+        "Analyze the overlap. If there is a potential venue or volunteer clash, explain the clash with the conflicting event and suggest a practical mitigation.\n"
+        "Output ONLY a JSON object with 'has_clash' (boolean) and 'reason' (string, max 3 sentences)."
+    )
+
+    resp = call_gemini_llm(prompt, system_instruction="You are an event scheduling assistant. Output ONLY valid JSON.")
+    if resp:
+        try:
+            cleaned = resp.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(cleaned)
+            return CheckEventClashResult(
+                has_clash=bool(parsed.get("has_clash", True)),
+                reason=str(parsed.get("reason", f"Potential schedule overlap with '{overlapping[0].title}'."))
+            )
+        except Exception:
+            pass
+
+    return CheckEventClashResult(
+        has_clash=True,
+        reason=f"Schedule overlaps with '{overlapping[0].title}'. Consider adjusting the timing to avoid volunteer fatigue."
+    )
+
+
+def get_coordinator_event_suggestions(db: Session, society_id: str) -> List[CoordinatorEventSuggestion]:
+    users = db.query(User).filter(User.society_id == society_id, User.role == "resident").all()
+    if not users:
+        return [
+            CoordinatorEventSuggestion(title="Community Mixer", description="A casual get-together for neighbors to connect.", reason="Safe starting event for community onboarding."),
+            CoordinatorEventSuggestion(title="Skill Share Weekend", description="Residents showcase and teach basic everyday skills.", reason="Encourages marketplace participation."),
+            CoordinatorEventSuggestion(title="Society Cleanliness Drive", description="Volunteer group effort to spruce up common spaces.", reason="High resident interest in community improvement.")
+        ]
+
+    interests_pool = [u.interests for u in users if u.interests]
+    volunteer_pool = [u.volunteer_interest for u in users if u.volunteer_interest]
+
+    prompt = (
+        f"Based on the onboarding survey data of residents in this residential society:\n"
+        f"Interests: {', '.join(interests_pool)[:1000] or 'General community'}\n"
+        f"Volunteer Preferences: {', '.join(volunteer_pool)[:1000] or 'General support'}\n\n"
+        "Suggest 3 high-impact community events that the society coordinator should organize.\n"
+        "Return ONLY a JSON array of 3 objects, each with 'title', 'description' (1 sentence), and 'reason' (why it matches community preferences, 1 sentence)."
+    )
+
+    resp = call_gemini_llm(prompt, system_instruction="You are an expert residential community event strategist. Output ONLY a valid JSON array.")
+    if resp:
+        try:
+            cleaned = resp.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                return [
+                    CoordinatorEventSuggestion(
+                        title=item.get("title", "Community Event"),
+                        description=item.get("description", "A collaborative neighborhood event."),
+                        reason=item.get("reason", "Tailored to resident interests.")
+                    )
+                    for item in parsed[:3]
+                ]
+        except Exception as e:
+            print(f"Error parsing coordinator suggestions: {e}")
+
+    return [
+        CoordinatorEventSuggestion(title="Community Social Mixer", description="An open gathering with games and snacks to foster neighborhood friendship.", reason="Engages a broad cross-section of residents across all flat units."),
+        CoordinatorEventSuggestion(title="Neighborhood Skill Exchange Fair", description="Live demonstrations where neighbors teach practical hobbies, cooking, and tech tips.", reason="Directly aligns with residents offering diverse skills."),
+        CoordinatorEventSuggestion(title="Society Greenery & Planting Day", description="A hands-on gardening morning planting saplings in community garden beds.", reason="Fosters collective civic pride and volunteer engagement.")
+    ]
+
+
+def get_resident_suggestions(db: Session, user: User) -> ResidentSuggestionsResult:
+    from src.events.models import EventItem
+    skills = db.query(Skill).filter(Skill.society_id == user.society_id, Skill.status == "approved", Skill.provider_id != user.id).all()
+    events = db.query(EventItem).filter(EventItem.society_id == user.society_id, EventItem.status == "upcoming").all()
+
+    skill_context = "\n".join([f"- ID:{s.id} | {s.title}: {s.description} ({s.credits} Credits, Category: {s.category}, By: {s.provider_name})" for s in skills])
+    event_context = "\n".join([f"- ID:{e.id} | {e.title}: {e.description} (Needs {e.volunteers_needed} volunteers)" for e in events])
+
+    prompt = (
+        f"Resident Profile:\n"
+        f"Name: {user.name}\n"
+        f"Interests: {user.interests or 'General community'}\n"
+        f"Volunteer Preferences: {user.volunteer_interest or 'General'}\n\n"
+        f"Available Approved Skills in Society:\n{skill_context or 'None currently'}\n\n"
+        f"Upcoming Community Events:\n{event_context or 'None currently'}\n\n"
+        "Recommend up to 3 skills the resident would find useful/enjoyable, and up to 2 events they should volunteer for.\n"
+        "Return ONLY a JSON object with two keys:\n"
+        "- 'skill_suggestions': array of objects with 'id', 'title', 'provider_name', 'credits', 'category', 'reason'\n"
+        "- 'volunteer_suggestions': array of objects with 'id', 'title', 'reason'"
+    )
+
+    resp = call_gemini_llm(prompt, system_instruction="You are a personalized community recommender. Output ONLY valid JSON.")
+    if resp:
+        try:
+            cleaned = resp.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(cleaned)
+            skill_sug = parsed.get("skill_suggestions", [])
+            vol_sug = parsed.get("volunteer_suggestions", [])
+
+            # Enrich skill items if missing fields
+            skill_map = {s.id: s for s in skills}
+            enriched_skills = []
+            for ss in skill_sug:
+                sid = ss.get("id")
+                if sid in skill_map:
+                    s_obj = skill_map[sid]
+                    enriched_skills.append({
+                        "id": s_obj.id,
+                        "title": s_obj.title,
+                        "provider_name": s_obj.provider_name,
+                        "credits": s_obj.credits,
+                        "category": s_obj.category,
+                        "reason": ss.get("reason", "Matches your interests.")
+                    })
+                elif ss.get("title"):
+                    enriched_skills.append(ss)
+
+            return ResidentSuggestionsResult(
+                skill_suggestions=enriched_skills[:3],
+                volunteer_suggestions=vol_sug[:2]
+            )
+        except Exception as e:
+            print(f"Error parsing resident suggestions: {e}")
+
+    # Fallback recommendations from available data
+    fallback_skills = [
+        {"id": s.id, "title": s.title, "provider_name": s.provider_name, "credits": s.credits, "category": s.category, "reason": "Popular in your society"}
+        for s in skills[:3]
+    ]
+    fallback_events = [
+        {"id": e.id, "title": e.title, "reason": f"Looking for {e.volunteers_needed} volunteers"}
+        for e in events[:2]
+    ]
+    return ResidentSuggestionsResult(
+        skill_suggestions=fallback_skills,
+        volunteer_suggestions=fallback_events
+    )
+
+
+def generate_and_save_onboarding_summary(user_id: str):
+    from src.database import SessionLocal
+    from src.users.models import UserSummary
+    from datetime import date
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return
+
+        prompt = (
+            f"Write a personalized, welcoming community digest for resident {user.name}.\n"
+            f"Interests: {user.interests or 'General community'}\n"
+            f"Skills Offered: {user.offered_skills_text or 'None specified'}\n"
+            f"Volunteer Interest: {user.volunteer_interest or 'General'}\n"
+            "Keep it very brief, engaging, and highlight 2-3 types of community activities or skill exchanges they might enjoy. "
+            "Limit to 2-3 warm sentences. Do not use markdown."
+        )
+        summary_text = call_gemini_llm(prompt, system_instruction="You are a helpful residential community assistant.")
+        if not summary_text:
+            summary_text = f"Welcome to the community, {user.name}! Explore skills and equipment in your society marketplace or volunteer for upcoming events."
+
+        existing = db.query(UserSummary).filter(UserSummary.user_id == user.id).first()
+        if existing:
+            existing.summary_text = summary_text.strip()
+            existing.generated_at = date.today().isoformat()
+        else:
+            new_summary = UserSummary(
+                user_id=user.id,
+                summary_text=summary_text.strip(),
+                generated_at=date.today().isoformat()
+            )
+            db.add(new_summary)
+        db.commit()
+    except Exception as e:
+        print(f"Error generating onboarding summary for user {user_id}: {e}")
+    finally:
+        db.close()
+
 

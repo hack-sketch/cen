@@ -19,7 +19,9 @@ export interface User {
   idProofUploaded: boolean;
   idProofVerified?: boolean;
   idProofUrl?: string;
+  verificationStatus?: "verified" | "pending" | "unverified" | "pending_society" | "no_society";
   isCoordinator: boolean;
+
   avatarColor?: string;
 
   interests?: string[];
@@ -137,6 +139,8 @@ export interface EventItem {
   title: string;
   description: string;
   date: string;
+  startTime?: string;
+  endTime?: string;
   time?: string;
   location?: string;
   createdByCoordinatorId: string;
@@ -144,7 +148,10 @@ export interface EventItem {
   volunteers: string[];
   status: "upcoming" | "completed";
   societyId: string;
+  color?: string;
+  textColor?: string;
 }
+
 
 export interface VolunteerRequest {
   id: string;
@@ -155,7 +162,9 @@ export interface VolunteerRequest {
   type: "self-requested" | "coordinator-invited";
   status: "pending" | "approved" | "rejected" | "left";
   leaveReason?: string;
+  rejectionReason?: string;
 }
+
 
 export interface Complaint {
   id: string;

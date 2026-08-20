@@ -128,3 +128,145 @@ def test_summarize_notice(client):
     assert len(data["summary"]) > 0
 
 
+def test_check_event_clash_and_coordinator_suggestions(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.events.models import EventItem
+
+    coord = create_user(db_session, UserCreate(name="Clash Coord", email="clashcoord@cen.app", password="password123"), role="coordinator")
+    soc = Society(name="Clash Society", address="500 Indiranagar", admin_id=coord.id, capacity=50, key="CLASH-SOC")
+    db_session.add(soc)
+    db_session.commit()
+    coord.society_id = soc.id
+    db_session.commit()
+
+    # Existing event in this society
+    ev1 = EventItem(
+        title="Annual Community AGM",
+        description="General assembly meeting of society residents",
+        date="2026-10-15",
+        start_time="2026-10-15T10:00:00Z",
+        end_time="2026-10-15T13:00:00Z",
+        created_by_coordinator_id=coord.id,
+        volunteers_needed=2,
+        volunteers="",
+        status="upcoming",
+        society_id=soc.id,
+    )
+    db_session.add(ev1)
+    db_session.commit()
+
+    login_resp = client.post("/api/v1/auth/login", json={"email": "clashcoord@cen.app", "password": "password123"})
+    token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Check clash with overlapping time
+    clash_resp = client.post(
+        "/api/v1/ai/check-event-clash",
+        json={
+            "title": "Kids Sports Meet",
+            "description": "Running race in ground",
+            "start_time": "2026-10-15T11:00:00Z",
+            "end_time": "2026-10-15T14:00:00Z",
+            "society_id": soc.id,
+        },
+        headers=headers,
+    )
+    assert clash_resp.status_code == 200
+    clash_data = clash_resp.json()
+    assert clash_data["hasClash"] is True
+    assert "Annual Community AGM" in clash_data["reason"]
+
+    # 2. Check no clash on different day
+    no_clash_resp = client.post(
+        "/api/v1/ai/check-event-clash",
+        json={
+            "title": "Yoga Workshop",
+            "description": "Morning yoga in club house",
+            "start_time": "2026-10-16T07:00:00Z",
+            "end_time": "2026-10-16T08:30:00Z",
+            "society_id": soc.id,
+        },
+        headers=headers,
+    )
+    assert no_clash_resp.status_code == 200
+    no_clash_data = no_clash_resp.json()
+    assert no_clash_data["hasClash"] is False
+
+    # 3. Coordinator event suggestions
+    sug_resp = client.get("/api/v1/ai/coordinator-event-suggestions", headers=headers)
+    assert sug_resp.status_code == 200
+    sug_data = sug_resp.json()
+    assert len(sug_data) >= 1
+    assert "title" in sug_data[0]
+    assert "description" in sug_data[0]
+    assert "reason" in sug_data[0]
+
+
+def test_resident_suggestions_and_user_summary(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.marketplace.models import Skill
+    from src.events.models import EventItem
+
+    soc_admin = create_user(db_session, UserCreate(name="ResSoc Admin", email="ressocadmin@cen.app", password="password123"), role="admin")
+    soc = Society(name="Res Society", address="700 Whitefield", admin_id=soc_admin.id, capacity=50, key="RES-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    resident = create_user(db_session, UserCreate(name="Survey Resident", email="surveyres@cen.app", password="password123"), role="resident")
+    resident.society_id = soc.id
+    resident.interests = "Gardening,Cooking"
+    resident.volunteer_interest = "yes"
+    db_session.commit()
+
+    # Skill matching interest
+    skill = Skill(
+        title="Organic Herb Gardening Class",
+        category="Gardening",
+        provider_id=soc_admin.id,
+        provider_name="ResSoc Admin",
+        credits=5,
+        description="Learn to grow organic herbs on your balcony",
+        status="approved",
+        society_id=soc.id,
+    )
+    # Event matching volunteer interest
+    event = EventItem(
+        title="Balcony Planting Drive",
+        description="Community initiative to plant herbs and greens",
+        date="2026-11-01",
+        created_by_coordinator_id=soc_admin.id,
+        volunteers_needed=5,
+        volunteers="",
+        status="upcoming",
+        society_id=soc.id,
+    )
+    db_session.add(skill)
+    db_session.add(event)
+    db_session.commit()
+
+    login_resp = client.post("/api/v1/auth/login", json={"email": "surveyres@cen.app", "password": "password123"})
+    token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Resident suggestions
+    res_sug_resp = client.get("/api/v1/ai/resident-suggestions", headers=headers)
+    assert res_sug_resp.status_code == 200
+    res_sug_data = res_sug_resp.json()
+    assert "skillSuggestions" in res_sug_data
+    assert "volunteerSuggestions" in res_sug_data
+    assert len(res_sug_data["skillSuggestions"]) >= 1
+    assert "Organic Herb Gardening" in res_sug_data["skillSuggestions"][0]["title"]
+
+    # 2. User summary
+    sum_resp = client.get("/api/v1/users/me/summary", headers=headers)
+    assert sum_resp.status_code == 200
+    sum_data = sum_resp.json()
+    assert "summary" in sum_data
+    assert len(sum_data["summary"]) > 0
+
+
+

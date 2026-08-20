@@ -46,6 +46,9 @@ class UserResponse(UserBase):
     is_primary_resident: bool = False
     can_manage_onboarding: bool = True
     can_deactivate_residents: bool = False
+    verification_status: Optional[str] = "unverified"
+
+
 
     model_config = ConfigDict(
         alias_generator=to_camel,

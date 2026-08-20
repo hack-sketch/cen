@@ -35,3 +35,26 @@ class User(Base):
     is_primary_resident = Column(Boolean, nullable=False, default=False)
     can_manage_onboarding = Column(Boolean, nullable=False, default=True)
     can_deactivate_residents = Column(Boolean, nullable=False, default=False)
+
+
+    @property
+    def verification_status(self) -> str:
+        if self.role in ("owner", "admin"):
+            return "verified"
+        if not self.society_id:
+            return "pending_society"
+        if self.id_proof_verified:
+            return "verified"
+        if self.id_proof_uploaded:
+            return "pending"
+        return "unverified"
+
+
+
+class UserSummary(Base):
+    __tablename__ = "user_summaries"
+    id = Column(String, primary_key=True, default=generate_uuid, index=True)
+    user_id = Column(String, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    summary_text = Column(String, nullable=False)
+    generated_at = Column(String, nullable=False, default=lambda: date.today().isoformat())
+

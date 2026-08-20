@@ -1,6 +1,7 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
+
 
 from src.database import get_db
 from src.dependencies import get_current_user_from_token, require_roles
@@ -52,16 +53,36 @@ def update_my_profile(
 @router.post("/me/survey", response_model=UserResponse)
 def update_onboarding_survey(
     payload: OnboardingSurveyPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token),
 ):
-    return user_service.update_onboarding_survey(
+    res = user_service.update_onboarding_survey(
         db,
         current_user.id,
         payload.interests,
         payload.offered_skills_text or "",
         payload.volunteer_interest or "",
     )
+    from src.ai.service import generate_and_save_onboarding_summary
+    background_tasks.add_task(generate_and_save_onboarding_summary, current_user.id)
+    return res
+
+
+@router.get("/me/summary", response_model=dict)
+def get_my_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    from src.users.models import UserSummary
+    summary = db.query(UserSummary).filter(UserSummary.user_id == current_user.id).first()
+    if summary:
+        return {"summary": summary.summary_text, "generatedAt": summary.generated_at}
+    return {
+        "summary": f"Welcome to the community, {current_user.name}! Complete your onboarding survey to receive personalized community updates and skill recommendations.",
+        "generatedAt": None
+    }
+
 
 
 @router.post("/me/leave-society", response_model=UserResponse)
@@ -94,13 +115,20 @@ def get_user_by_id(
 
 
 @router.post("/{user_id}/verify-id-proof", response_model=UserResponse)
+@router.post("/{user_id}/verify-id", response_model=UserResponse)
 def verify_id_proof(
     user_id: str,
     verified: bool = True,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["owner", "admin"])),
+    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
 ):
+    target_user = user_service.get_user_by_id(db, user_id)
+    if current_user.role != "owner" and target_user.society_id != current_user.society_id:
+        raise ForbiddenException("Cannot verify residents belonging to another society.")
+    if current_user.role == "coordinator" and not current_user.can_manage_onboarding:
+        raise ForbiddenException("You do not have permission to manage resident onboarding or verifications.")
     return user_service.verify_user_id_proof(db, user_id, verified)
+
 
 
 @router.post("/{user_id}/promote", response_model=UserResponse)

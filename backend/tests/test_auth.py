@@ -149,3 +149,81 @@ def test_health_check(client):
     assert resp.json()["status"] == "ok"
 
 
+def test_user_identity_verification_lifecycle_and_rbac(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+
+    admin = create_user(
+        db_session,
+        UserCreate(name="Admin Verifier", email="adminverifier@cen.app", password="password123"),
+        role="admin",
+    )
+    soc = Society(name="Verification Society", address="101 Tech Park", admin_id=admin.id, capacity=50, key="VERIFY-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    admin.society_id = soc.id
+    db_session.commit()
+
+    # 1. Admin verification status is 'verified' by default
+    login_admin = client.post("/api/v1/auth/login", json={"email": "adminverifier@cen.app", "password": "password123"})
+    admin_token = login_admin.json().get("accessToken") or login_admin.json().get("access_token")
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    me_admin = client.get("/api/v1/auth/me", headers=admin_headers)
+    assert me_admin.status_code == 200
+    assert me_admin.json().get("verificationStatus") == "verified"
+
+    # 2. Resident with no society -> 'pending_society'
+    res = create_user(
+        db_session,
+        UserCreate(name="New Resident", email="newres@cen.app", password="password123"),
+        role="resident",
+    )
+    login_res = client.post("/api/v1/auth/login", json={"email": "newres@cen.app", "password": "password123"})
+    res_token = login_res.json().get("accessToken") or login_res.json().get("access_token")
+    res_headers = {"Authorization": f"Bearer {res_token}"}
+
+    me_res = client.get("/api/v1/auth/me", headers=res_headers)
+    assert me_res.json().get("verificationStatus") == "pending_society"
+
+    # 3. Attach resident to society -> status becomes 'unverified'
+    res.society_id = soc.id
+    db_session.commit()
+
+    me_res_joined = client.get("/api/v1/auth/me", headers=res_headers)
+    assert me_res_joined.json().get("verificationStatus") == "unverified"
+
+    # 4. Resident uploads ID proof -> status becomes 'pending'
+    upload_resp = client.post(
+        "/api/v1/users/me/id-proof",
+        json={"idProofUrl": "mock://my-passport.pdf"},
+        headers=res_headers,
+    )
+    assert upload_resp.status_code == 200
+    assert upload_resp.json().get("verificationStatus") == "pending"
+    assert upload_resp.json().get("idProofUploaded") is True
+    assert upload_resp.json().get("idProofVerified") is False
+
+    # 5. Admin verifies resident's ID proof -> status becomes 'verified'
+    verify_resp = client.post(
+        f"/api/v1/users/{res.id}/verify-id-proof?verified=true",
+        headers=admin_headers,
+    )
+    assert verify_resp.status_code == 200
+    assert verify_resp.json().get("verificationStatus") == "verified"
+    assert verify_resp.json().get("idProofVerified") is True
+
+    # 6. Admin rejects ID proof -> status transitions back to 'unverified' so user can re-upload
+    reject_resp = client.post(
+        f"/api/v1/users/{res.id}/verify-id-proof?verified=false",
+        headers=admin_headers,
+    )
+    assert reject_resp.status_code == 200
+    assert reject_resp.json().get("verificationStatus") == "unverified"
+    assert reject_resp.json().get("idProofUploaded") is False
+    assert reject_resp.json().get("idProofVerified") is False
+
+
+

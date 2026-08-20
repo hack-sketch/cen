@@ -18,8 +18,10 @@ import {
   joinRequestService,
   analyticsService,
 } from "@/services";
+import { getUserSummary, getResidentSuggestions } from "@/services/ai";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import {
   Building2, Users, ClipboardList, Wallet, CheckSquare, AlertCircle,
   Calendar, Megaphone, Sparkles, Package, ArrowUpRight, ArrowDownLeft,
@@ -40,7 +42,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 
 export const Route = createFileRoute("/app/dashboard")({
   component: Dashboard,
@@ -531,6 +536,9 @@ function ResidentDash() {
       ) ?? [])
     : [];
 
+  const userSummary = useQuery({ queryKey: ["userSummary", user!.id], queryFn: () => getUserSummary() });
+  const aiSuggestions = useQuery({ queryKey: ["residentAiSuggestions", user!.id], queryFn: () => getResidentSuggestions() });
+
   const myOpen = complaints.data?.filter((c) => c.status === "open").length ?? 0;
   const myActive = skills.data?.filter((s) => s.providerId === user!.id && s.status === "approved").length ?? 0;
 
@@ -541,6 +549,7 @@ function ResidentDash() {
   const recommended = matchedSkills.length > 0
     ? matchedSkills.slice(0, 3)
     : approvedSkills.slice(0, 3);
+
 
   return (
     <div className="space-y-6">
@@ -860,6 +869,31 @@ function ResidentDash() {
         </Card>
       ) : (
         <>
+          {/* AI Community Digest & Onboarding Summary */}
+          <div className="rounded-2xl border border-line/60 bg-gradient-to-r from-deep-forest/10 via-soft-violet/5 to-white p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-deep-forest/10 text-deep-forest border border-deep-forest/20 flex items-center justify-center shrink-0">
+                <Sparkles className="h-5 w-5 text-deep-forest animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-ink uppercase tracking-wider">Personalized Community Digest (AI)</h3>
+                  <Badge variant="outline" className="text-[9px] bg-white border-line font-bold text-deep-forest">
+                    Live
+                  </Badge>
+                </div>
+                <p className="text-xs text-on-surface-variant mt-1 leading-relaxed max-w-2xl">
+                  {userSummary.data?.summary || `Welcome to your community, ${user?.name}! Complete your onboarding survey to get tailored suggestions.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="self-start sm:self-center shrink-0">
+              <OnboardingSurveyDialog />
+            </div>
+          </div>
+
+
           {/* Stat Grid */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat icon={Wallet} label="Credit Balance" value={`${user!.creditBalance} Crd`} trend={{ value: "Wallet active", type: "neutral" }} />
@@ -886,8 +920,29 @@ function ResidentDash() {
                 </Link>
               </div>
             </CardHeader>
-            <CardContent className="p-4 sm:p-6 pt-3 sm:pt-4">
-              {recommended.length === 0 ? (
+            <CardContent className="p-4 sm:p-6 pt-3 sm:pt-4 space-y-4">
+              {/* Skill suggestions */}
+              {aiSuggestions.data?.skillSuggestions && aiSuggestions.data.skillSuggestions.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {aiSuggestions.data.skillSuggestions.map((item, idx) => (
+                    <Card key={idx} className="border-line/60 bg-white hover:border-soft-violet/40 transition-all p-3 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <Badge className="bg-soft-violet/10 text-soft-violet text-[9px] font-semibold border-soft-violet/20">{item.category || "Skill"}</Badge>
+                          {item.credits !== undefined && (
+                            <span className="text-[10px] font-bold text-ink">{item.credits} Crd</span>
+                          )}
+                        </div>
+                        <div className="font-bold text-xs text-ink line-clamp-1">{item.title}</div>
+                        <div className="text-[10px] text-deep-forest font-semibold mt-1 italic">💡 {item.reason}</div>
+                      </div>
+                      <Link to="/app/skills" className="mt-3">
+                        <Button variant="outline" className="w-full h-7 text-[10px] font-semibold border-line hover:bg-soft-violet/10 hover:text-soft-violet cursor-pointer">Explore Service</Button>
+                      </Link>
+                    </Card>
+                  ))}
+                </div>
+              ) : recommended.length === 0 ? (
                 <div className="text-xs text-on-surface-variant py-4 text-center">No matching services yet. Explore the marketplace!</div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -908,10 +963,36 @@ function ResidentDash() {
                   ))}
                 </div>
               )}
+
+              {/* Volunteer opportunities */}
+              {aiSuggestions.data?.volunteerSuggestions && aiSuggestions.data.volunteerSuggestions.length > 0 && (
+                <div className="pt-2 border-t border-soft-violet/10">
+                  <div className="text-[11px] font-bold text-ink mb-2 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-deep-forest" />
+                    Recommended Volunteer Drives
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {aiSuggestions.data.volunteerSuggestions.map((vol, idx) => (
+                      <div key={idx} className="bg-white p-3 rounded-xl border border-line/60 flex items-center justify-between gap-3 text-xs">
+                        <div>
+                          <div className="font-bold text-ink text-xs">{vol.title}</div>
+                          <div className="text-[10px] text-on-surface-variant italic mt-0.5">💡 {vol.reason}</div>
+                        </div>
+                        <Link to="/app/events">
+                          <Button size="sm" className="h-7 text-[10px] font-bold bg-deep-forest text-white hover:bg-deep-forest/90 px-3 cursor-pointer">
+                            View Event
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>
       )}
+
 
       {/* Two Column Layout: Notices and Transactions */}
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 min-w-0 w-full">
@@ -1177,3 +1258,163 @@ function ResidentDash() {
     </div>
   );
 }
+
+function OnboardingSurveyDialog() {
+  const { user, setUserById } = useAuth();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const AVAILABLE_INTERESTS = [
+    "Gardening",
+    "Cooking & Baking",
+    "Tech & IT",
+    "Home Repairs",
+    "Fitness & Yoga",
+    "Music & Arts",
+    "Tutoring",
+    "Pet Care",
+    "Civic Volunteering",
+  ];
+
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(
+    user?.interests || []
+  );
+  const [skillsText, setSkillsText] = useState(user?.offeredSkillsText || "");
+  const [volunteerInterest, setVolunteerInterest] = useState(user?.volunteerInterest || "yes");
+
+  const toggleInterest = (interest: string) => {
+    if (selectedInterests.includes(interest)) {
+      setSelectedInterests(selectedInterests.filter((i) => i !== interest));
+    } else {
+      setSelectedInterests([...selectedInterests, interest]);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      await userService.updateOnboardingSurvey(user!.id, {
+        interests: selectedInterests,
+        offeredSkillsText: skillsText,
+        volunteerInterest: volunteerInterest,
+      });
+      await setUserById(user!.id);
+      qc.invalidateQueries({ queryKey: ["userSummary"] });
+      qc.invalidateQueries({ queryKey: ["residentAiSuggestions"] });
+      qc.invalidateQueries({ queryKey: ["mySkills"] });
+      toast.success("Community survey and preferences updated!");
+      setOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update preferences.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-xs font-bold border-deep-forest/30 text-deep-forest hover:bg-deep-forest/10 cursor-pointer h-9 px-3.5"
+        >
+          <Sparkles className="h-3.5 w-3.5 mr-1.5 text-deep-forest" />
+          {user?.interests && user.interests.length > 0 ? "Edit Preferences" : "Complete Survey"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg w-[95vw] max-h-[90vh] overflow-y-auto border-line/60 rounded-2xl p-4 sm:p-6 bg-white">
+        <DialogHeader className="pb-3 border-b border-line/35">
+          <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+            <Sparkles className="h-4.5 w-4.5 text-deep-forest" />
+            Resident Community Preferences & Survey
+          </DialogTitle>
+          <DialogDescription className="text-xs text-on-surface-variant">
+            Personalize your AI assistant, match skill exchanges, and receive tailored society updates.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-4">
+          {/* Interest tags */}
+          <div className="space-y-2">
+            <Label className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">
+              Areas of Interest & Needs (Select all that apply)
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABLE_INTERESTS.map((item) => {
+                const active = selectedInterests.includes(item);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleInterest(item)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      active
+                        ? "bg-deep-forest text-white border-deep-forest shadow-2xs scale-102"
+                        : "bg-slate-50 text-ink border-line/60 hover:bg-slate-100"
+                    )}
+                  >
+                    {active ? "✓ " : "+ "}
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Skills resident can offer */}
+          <div className="space-y-1.5">
+            <Label className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">
+              Skills or Services You Can Offer
+            </Label>
+            <Input
+              value={skillsText}
+              onChange={(e) => setSkillsText(e.target.value)}
+              placeholder="e.g. Electric guitar tutoring, basic plumbing, Python coding..."
+              className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg"
+            />
+          </div>
+
+          {/* Volunteer interest */}
+          <div className="space-y-2">
+            <Label className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">
+              Willing to Volunteer for Society Drives?
+            </Label>
+            <div className="flex gap-3">
+              {[
+                { value: "yes", label: "Yes, invite me for drives" },
+                { value: "weekends", label: "Weekends only" },
+                { value: "no", label: "Not at this time" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setVolunteerInterest(opt.value)}
+                  className={cn(
+                    "flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold border transition-all text-center cursor-pointer",
+                    volunteerInterest === opt.value
+                      ? "bg-emerald-50 text-emerald-950 border-emerald-300 font-bold"
+                      : "bg-slate-50 text-on-surface-variant border-line/60 hover:bg-slate-100"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Button
+            disabled={loading}
+            onClick={handleSave}
+            className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer mt-2 active:scale-98 transition-all"
+          >
+            {loading ? "Saving Preferences..." : "Save Community Preferences"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

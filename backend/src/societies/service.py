@@ -447,6 +447,10 @@ def approve_join_request(db: Session, request_id: str, current_user: Optional[Us
         user.household_id = jr.household_id
         user.is_primary_resident = is_first_occupant
         user.credit_balance = (user.credit_balance or 0) + initial_credits
+        if jr.id_proof_url:
+            user.id_proof_url = jr.id_proof_url
+            user.id_proof_uploaded = True
+            user.id_proof_verified = True
     else:
         # Create user record if applicant user ID did not previously exist
         from src.auth.service import get_password_hash
@@ -462,8 +466,12 @@ def approve_join_request(db: Session, request_id: str, current_user: Optional[Us
             credit_balance=initial_credits,
             has_completed_survey=True,
             is_active=True,
+            id_proof_url=jr.id_proof_url,
+            id_proof_uploaded=bool(jr.id_proof_url),
+            id_proof_verified=bool(jr.id_proof_url),
         )
         db.add(user)
+
 
     try:
         from src.wallet.models import Transaction

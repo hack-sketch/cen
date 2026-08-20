@@ -820,7 +820,49 @@ export const userService = {
     }
     return delay(u ?? null);
   },
+  uploadIdProof: async (userId: string, idProofUrl: string) => {
+    try {
+      const res = await apiFetch<any>("/users/me/id-proof", {
+        method: "POST",
+        body: JSON.stringify({ idProofUrl }),
+      });
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] uploadIdProof fallback:", err);
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) {
+      u.idProofUrl = idProofUrl;
+      u.idProofUploaded = true;
+      u.idProofVerified = false;
+      u.verificationStatus = "pending";
+    }
+    return delay(u ?? null);
+  },
+  verifyIdProof: async (userId: string, verified: boolean) => {
+    try {
+      const res = await apiFetch<any>(`/users/${userId}/verify-id-proof?verified=${verified}`, {
+        method: "POST",
+      });
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] verifyIdProof fallback:", err);
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) {
+      u.idProofVerified = verified;
+      if (verified) {
+        u.idProofUploaded = true;
+        u.verificationStatus = "verified";
+      } else {
+        u.idProofUploaded = false;
+        u.verificationStatus = "unverified";
+      }
+    }
+    return delay(u ?? null);
+  },
 };
+
 
 // ---------------- Skills ----------------
 export const skillService = {
@@ -1179,10 +1221,14 @@ export const eventService = {
         body: JSON.stringify({
           title: e.title,
           date: e.date,
+          startTime: e.startTime,
+          endTime: e.endTime,
           time: e.time,
           location: e.location,
           description: e.description,
           volunteersNeeded: e.volunteersNeeded,
+          color: e.color,
+          textColor: e.textColor,
         }),
       });
       if (res) return res;
@@ -1193,6 +1239,7 @@ export const eventService = {
     state.events.push(ne);
     return delay(ne);
   },
+
   listVolunteerRequests: async (societyId: string) => {
     try {
       const res = await apiFetch<any[]>(`/events/volunteers?society_id=${societyId}`);
@@ -1276,16 +1323,23 @@ export const eventService = {
     }
     return delay(true);
   },
-  rejectVolunteer: async (id: string) => {
+  rejectVolunteer: async (id: string, reason?: string) => {
     try {
-      await apiFetch<any>(`/events/volunteer-requests/${id}/reject`, { method: "POST" });
+      await apiFetch<any>(`/events/volunteer-requests/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ rejectionReason: reason }),
+      });
     } catch (err) {
       console.warn("[API Notice] rejectVolunteer fallback:", err);
     }
     const v = state.volunteerRequests.find((x) => x.id === id);
-    if (v) v.status = "rejected";
+    if (v) {
+      v.status = "rejected";
+      v.rejectionReason = reason;
+    }
     return delay(true);
   },
+
   cancelInvite: async (id: string) => {
     try {
       await apiFetch<any>(`/events/volunteer-requests/${id}/cancel`, { method: "POST" });
@@ -1325,7 +1379,55 @@ export const eventService = {
     if (ev) ev.volunteers = ev.volunteers.filter((uid) => uid !== residentId);
     return delay(true);
   },
+  update: async (id: string, data: Partial<mock.EventItem>) => {
+    try {
+      const res = await apiFetch<any>(`/events/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: data.title,
+          description: data.description,
+          date: data.date,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          volunteersNeeded: data.volunteersNeeded,
+          color: data.color,
+          textColor: data.textColor,
+          status: data.status,
+        }),
+      });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const ev = state.events.find((e) => e.id === id);
+    if (ev) {
+      Object.assign(ev, data);
+    }
+    return delay(ev);
+  },
+  complete: async (id: string) => {
+    try {
+      const res = await apiFetch<any>(`/events/${id}/complete`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const ev = state.events.find((e) => e.id === id);
+    if (ev) ev.status = "completed";
+    return delay(ev);
+  },
+  delete: async (id: string) => {
+    try {
+      await apiFetch<any>(`/events/${id}`, { method: "DELETE" });
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    state.events = state.events.filter((e) => e.id !== id);
+    state.volunteerRequests = state.volunteerRequests.filter((v) => v.eventId !== id);
+    return delay(true);
+  },
 };
+
 
 // ---------------- Exchange Bookings ----------------
 export interface ExchangeBooking {

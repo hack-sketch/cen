@@ -1,11 +1,70 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from src.events.models import EventItem, VolunteerRequest
-from src.events.schemas import EventCreate
+from src.events.schemas import EventCreate, EventUpdate
 from src.exceptions import APIException, ForbiddenException, NotFoundException
 from src.societies import service as soc_service
 from src.users.models import User
+
+
+def get_event_by_id(db: Session, event_id: str) -> EventItem:
+    event = db.query(EventItem).filter(EventItem.id == event_id).first()
+    if not event:
+        raise NotFoundException(f"Event with ID '{event_id}' not found")
+    return event
+
+
+def update_event(db: Session, current_user: User, event_id: str, event_update: EventUpdate) -> EventItem:
+    event = get_event_by_id(db, event_id)
+    if current_user.role != "owner" and event.society_id != current_user.society_id:
+        raise ForbiddenException("Cannot modify an event belonging to another society.")
+
+    if event_update.title is not None:
+        event.title = event_update.title.strip()
+    if event_update.description is not None:
+        event.description = event_update.description.strip()
+    if event_update.date is not None:
+        event.date = event_update.date
+    if event_update.start_time is not None:
+        event.start_time = event_update.start_time
+    if event_update.end_time is not None:
+        event.end_time = event_update.end_time
+    if event_update.volunteers_needed is not None:
+        event.volunteers_needed = event_update.volunteers_needed
+    if event_update.status is not None:
+        event.status = event_update.status
+    if event_update.color is not None:
+        event.color = event_update.color
+    if event_update.text_color is not None:
+        event.text_color = event_update.text_color
+
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def complete_event(db: Session, current_user: User, event_id: str) -> EventItem:
+    event = get_event_by_id(db, event_id)
+    if current_user.role != "owner" and event.society_id != current_user.society_id:
+        raise ForbiddenException("Cannot complete an event belonging to another society.")
+    event.status = "completed"
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+def delete_event(db: Session, current_user: User, event_id: str) -> bool:
+    event = get_event_by_id(db, event_id)
+    if current_user.role != "owner" and event.society_id != current_user.society_id:
+        raise ForbiddenException("Cannot delete an event belonging to another society.")
+    
+    # Delete associated volunteer requests
+    db.query(VolunteerRequest).filter(VolunteerRequest.event_id == event_id).delete()
+    db.delete(event)
+    db.commit()
+    return True
+
 
 
 def list_events(db: Session, society_id: str) -> List[EventItem]:
@@ -20,20 +79,29 @@ def create_event(db: Session, coordinator: User, event_in: EventCreate) -> Event
     if not soc_service.is_society_operational(soc, db):
         raise ForbiddenException("Society is not operational until at least 2 coordinators are registered.")
 
+    start_time = event_in.start_time or (f"{event_in.date}T09:00:00Z" if event_in.date else None)
+    end_time = event_in.end_time or (f"{event_in.date}T17:00:00Z" if event_in.date else None)
+    event_date = event_in.date or (event_in.start_time[:10] if event_in.start_time else "")
+
     event = EventItem(
         title=event_in.title.strip(),
         description=event_in.description.strip(),
-        date=event_in.date,
+        date=event_date,
+        start_time=start_time,
+        end_time=end_time,
         created_by_coordinator_id=coordinator.id,
         volunteers_needed=event_in.volunteers_needed,
         volunteers="",
         status="upcoming",
         society_id=coordinator.society_id,
+        color=event_in.color or "#dce8fb",
+        text_color=event_in.text_color or "#1e3a6e",
     )
     db.add(event)
     db.commit()
     db.refresh(event)
     return event
+
 
 
 def list_volunteer_requests_for_event(db: Session, event_id: str) -> List[VolunteerRequest]:
@@ -63,6 +131,7 @@ def request_to_volunteer(db: Session, resident: User, event_id: str) -> Voluntee
             existing.type = "self-requested"
             existing.status = "pending"
             existing.leave_reason = None
+            existing.rejection_reason = None
             db.commit()
             db.refresh(existing)
         return existing
@@ -101,6 +170,7 @@ def invite_volunteer(
         existing.type = "coordinator-invited"
         existing.status = "pending"
         existing.leave_reason = None
+        existing.rejection_reason = None
         db.commit()
         db.refresh(existing)
         return existing
@@ -142,7 +212,9 @@ def approve_volunteer_request(db: Session, current_user: User, request_id: str) 
     return vr
 
 
-def reject_volunteer_request(db: Session, current_user: User, request_id: str) -> VolunteerRequest:
+def reject_volunteer_request(
+    db: Session, current_user: User, request_id: str, rejection_reason: Optional[str] = None
+) -> VolunteerRequest:
     vr = db.query(VolunteerRequest).filter(VolunteerRequest.id == request_id).first()
     if not vr:
         raise NotFoundException(f"Volunteer request with ID '{request_id}' not found")
@@ -151,9 +223,12 @@ def reject_volunteer_request(db: Session, current_user: User, request_id: str) -
         raise ForbiddenException("You can only decline volunteer invitations addressed to you.")
 
     vr.status = "rejected"
+    if rejection_reason:
+        vr.rejection_reason = rejection_reason.strip()
     db.commit()
     db.refresh(vr)
     return vr
+
 
 
 def cancel_volunteer_invite(db: Session, coordinator: User, request_id: str) -> VolunteerRequest:
