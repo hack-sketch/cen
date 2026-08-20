@@ -29,6 +29,7 @@ function Page() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [confirmSuspend, setConfirmSuspend] = useState<{ id: string; name: string } | null>(null);
+  const [suspendReason, setSuspendReason] = useState("");
   const societies = useQuery({ queryKey: ["societies", q], queryFn: () => societyService.list(q) });
   const list = societies.data ?? [];
   return (
@@ -36,7 +37,7 @@ function Page() {
       <PageHeader title="Societies Directory" description="Operational catalog of all active and suspended Community Exchange Networks." />
       <Input placeholder="Search societies..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm h-10 text-xs rounded-lg border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20" />
       <div className="grid gap-4">
-        {list.map((s) => (
+        {list.map((s: any) => (
           <Card key={s.id} className="border-line/60 shadow-[0_4px_20px_-4px_rgba(16,86,68,0.04)] hover:shadow-[0_12px_30px_-6px_rgba(16,86,68,0.1)] hover:-translate-y-0.5 transition-all duration-300 bg-white">
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-line/20">
@@ -52,13 +53,56 @@ function Page() {
                   </div>
                   <p className="text-xs text-on-surface-variant mt-1">{s.type} · {s.address}</p>
                 </div>
-                {s.status === "active" && (
-                  <div className="flex gap-2 flex-shrink-0">
-                    <EditConfigDialog society={s} onDone={() => qc.invalidateQueries({ queryKey: ["societies"] })} />
-                    <Button variant="outline" className="h-[34px] text-xs font-semibold px-4 border-line-strong hover:bg-panel cursor-pointer" onClick={() => setConfirmSuspend({ id: s.id, name: s.name })}>Suspend</Button>
-                  </div>
-                )}
+                <div className="flex gap-2 flex-shrink-0">
+                  {s.status === "active" ? (
+                    <>
+                      <EditConfigDialog society={s} onDone={() => qc.invalidateQueries({ queryKey: ["societies"] })} />
+                      <Button
+                        variant="outline"
+                        className="h-[34px] text-xs font-semibold px-4 border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+                        onClick={() => {
+                          setSuspendReason("");
+                          setConfirmSuspend({ id: s.id, name: s.name });
+                        }}
+                      >
+                        Suspend
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="h-[34px] text-xs font-semibold px-4 border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                      onClick={async () => {
+                        try {
+                          await societyService.revokeSuspension(s.id);
+                          toast.success(`Suspension revoked for "${s.name}". Network is now active.`);
+                          qc.invalidateQueries({ queryKey: ["societies"] });
+                        } catch (err: any) {
+                          toast.error(err.message || "Failed to revoke suspension");
+                        }
+                      }}
+                    >
+                      Revoke Suspension / Reactivate
+                    </Button>
+                  )}
+                </div>
               </div>
+
+              {s.status === "suspended" && (
+                <div className="mt-4 p-3.5 bg-rose-50/70 border border-rose-200 rounded-xl space-y-2">
+                  <div className="text-xs text-rose-900">
+                    <span className="font-bold">Suspension Reason: </span>
+                    {s.suspensionReason || "Under administrative policy review."}
+                  </div>
+                  {s.suspensionAppeal && (
+                    <div className="text-xs bg-white/80 p-2.5 rounded-lg border border-rose-200 text-slate-800">
+                      <span className="font-bold text-deep-forest">Admin Appeal: </span>
+                      "{s.suspensionAppeal}"
+                      {s.suspensionAppealDate && <span className="text-[10px] text-on-surface-variant ml-2">({s.suspensionAppealDate})</span>}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6 pt-4 mt-2">
                 <div>
@@ -88,16 +132,28 @@ function Page() {
       </div>
 
       <AlertDialog open={!!confirmSuspend} onOpenChange={(open) => !open && setConfirmSuspend(null)}>
-        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-md p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           <AlertDialogHeader className="space-y-2">
             <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
               <XCircle className="h-5 w-5 text-rose-600 flex-shrink-0" />
-              Suspend Society
+              Suspend Community Network
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
-              Are you sure you want to suspend <span className="font-bold text-ink">"{confirmSuspend?.name}"</span>? Suspending a society will disable listings and community operations for all its members.
+              Are you sure you want to suspend <span className="font-bold text-ink">"{confirmSuspend?.name}"</span>? All operational access and marketplace activities for its members will be immediately frozen.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-1.5 my-3">
+            <label className="text-xs font-bold text-ink">Suspension Reason / Notice to Community <span className="text-rose-600">*</span></label>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              placeholder="Provide a specific justification (e.g., Policy violation, compliance audit, fraudulent coordinator activity)..."
+              rows={3}
+              className="w-full text-xs p-2.5 rounded-lg border border-line-strong/60 focus:outline-none focus:ring-1 focus:ring-rose-500 text-ink bg-white resize-none"
+            />
+          </div>
+
           <AlertDialogFooter className="mt-5 flex gap-2">
             <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
               Cancel
@@ -105,10 +161,14 @@ function Page() {
             <AlertDialogAction 
               onClick={async () => {
                 if (confirmSuspend) {
-                  await societyService.suspend(confirmSuspend.id);
-                  toast.info("Society suspended");
-                  qc.invalidateQueries({ queryKey: ["societies"] });
-                  setConfirmSuspend(null);
+                  try {
+                    await societyService.suspend(confirmSuspend.id, suspendReason || "Platform policy compliance investigation.");
+                    toast.info(`Society "${confirmSuspend.name}" has been suspended.`);
+                    qc.invalidateQueries({ queryKey: ["societies"] });
+                    setConfirmSuspend(null);
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to suspend society");
+                  }
                 }
               }}
               className="h-9 px-4 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-98 transition-all"
@@ -120,6 +180,7 @@ function Page() {
       </AlertDialog>
     </div>
   );
+
 }
 
 function EditConfigDialog({ society, onDone }: { society: import("@/mocks/data").Society; onDone: () => void }) {

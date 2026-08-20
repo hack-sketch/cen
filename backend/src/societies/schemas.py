@@ -30,6 +30,9 @@ class SocietyResponse(SocietyBase):
     performance_score: int
     key: str
     is_operational: bool = True
+    suspension_reason: Optional[str] = None
+    suspension_appeal: Optional[str] = None
+    suspension_appeal_date: Optional[str] = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -38,10 +41,29 @@ class SocietyResponse(SocietyBase):
     )
 
 
+class SocietySuspendPayload(BaseModel):
+    reason: str = Field(..., min_length=3, description="Mandatory reason for society suspension")
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
+class SocietyAppealPayload(BaseModel):
+    appeal_reason: str = Field(..., min_length=3, description="Appeal justification for revoking society suspension")
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
 class SocietyConfigUpdate(BaseModel):
     capacity: Optional[int] = None
     members_per_household: Optional[int] = None
     initial_credits: Optional[int] = None
+
 
     model_config = ConfigDict(
         alias_generator=to_camel,

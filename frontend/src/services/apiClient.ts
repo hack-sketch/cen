@@ -64,8 +64,12 @@ export async function apiFetch<T>(
 
     if (!response.ok) {
       let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
+      let errorCode = "";
       try {
         const errorData = await response.json();
+        if (errorData.code) {
+          errorCode = errorData.code;
+        }
         if (errorData.detail) {
           if (typeof errorData.detail === "string") {
             errorMessage = errorData.detail;
@@ -73,11 +77,31 @@ export async function apiFetch<T>(
             errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
           }
         }
+        // Intercept Community Suspension and broadcast event for immediate route lockdown
+        if (
+          errorCode === "SOCIETY_SUSPENDED" ||
+          errorMessage.toLowerCase().includes("suspended by platform") ||
+          errorMessage.toLowerCase().includes("community network") && errorMessage.toLowerCase().includes("suspended")
+        ) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("cen:society_suspended", {
+                detail: {
+                  code: "SOCIETY_SUSPENDED",
+                  message: errorMessage,
+                },
+              })
+            );
+          }
+        }
       } catch {
         // Use fallback error message
       }
-      throw new Error(errorMessage);
+      const errObj: any = new Error(errorMessage);
+      errObj.code = errorCode;
+      throw errObj;
     }
+
 
     if (response.status === 204) {
       return null as T;

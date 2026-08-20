@@ -218,12 +218,34 @@ def update_society_config(
     return soc
 
 
-def suspend_society(db: Session, society_id: str) -> Society:
+def suspend_society(db: Session, society_id: str, reason: str = "Suspended by platform authority.") -> Society:
     soc = get_society_by_id(db, society_id)
     soc.status = "suspended"
+    soc.suspension_reason = reason.strip() if reason and reason.strip() else "Suspended by platform authority."
     db.commit()
     db.refresh(soc)
     return soc
+
+
+def revoke_society_suspension(db: Session, society_id: str) -> Society:
+    soc = get_society_by_id(db, society_id)
+    soc.status = "active"
+    soc.suspension_reason = None
+    soc.suspension_appeal = None
+    soc.suspension_appeal_date = None
+    db.commit()
+    db.refresh(soc)
+    return soc
+
+
+def appeal_society_suspension(db: Session, society_id: str, appeal_reason: str) -> Society:
+    soc = get_society_by_id(db, society_id)
+    soc.suspension_appeal = appeal_reason.strip()
+    soc.suspension_appeal_date = date.today().isoformat()
+    db.commit()
+    db.refresh(soc)
+    return soc
+
 
 
 def list_households_by_society(db: Session, society_id: str) -> List[Household]:

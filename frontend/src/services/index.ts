@@ -294,17 +294,56 @@ export const societyService = {
     return delay(true);
   },
 
-  suspend: async (id: string) => {
+  suspend: async (id: string, reason?: string) => {
     try {
-      await apiFetch<any>(`/societies/${id}/suspend`, { method: "POST" });
+      await apiFetch<any>(`/societies/${id}/suspend`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
       return true;
     } catch (err) {
       console.warn("[API Notice] suspend fallback:", err);
     }
     const s = state.societies.find((x) => x.id === id);
-    if (s) s.status = "suspended";
+    if (s) {
+      s.status = "suspended";
+      (s as any).suspensionReason = reason || "Suspended by platform authority.";
+    }
     return delay(true);
   },
+  revokeSuspension: async (id: string) => {
+    try {
+      await apiFetch<any>(`/societies/${id}/revoke-suspension`, { method: "POST" });
+      return true;
+    } catch (err) {
+      console.warn("[API Notice] revokeSuspension fallback:", err);
+    }
+    const s = state.societies.find((x) => x.id === id);
+    if (s) {
+      s.status = "active";
+      (s as any).suspensionReason = undefined;
+      (s as any).suspensionAppeal = undefined;
+    }
+    return delay(true);
+  },
+  appealSuspension: async (id: string, appealReason: string) => {
+    try {
+      const res = await apiFetch<any>(`/societies/${id}/appeal-suspension`, {
+        method: "POST",
+        body: JSON.stringify({ appealReason }),
+      });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const s = state.societies.find((x) => x.id === id);
+    if (s) {
+      (s as any).suspensionAppeal = appealReason;
+      (s as any).suspensionAppealDate = new Date().toISOString().slice(0, 10);
+    }
+    return delay(s ?? true);
+  },
+
   getApplicationByEmail: async (email: string) => {
     try {
       const res = await apiFetch<any>("/societies/applications/me");

@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle2, Clock, ShieldAlert, LogOut, Building, Sparkles, ArrowRight, AlertCircle, RotateCcw, Building2, Edit3, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, ShieldAlert, LogOut, Building, Sparkles, ArrowRight, AlertCircle, RotateCcw, Building2, Edit3, XCircle, Lock, AlertTriangle, HelpCircle } from "lucide-react";
+
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
@@ -30,9 +31,12 @@ function AppLayout() {
   const { user, loading, logout } = useAuth();
   const nav = useNavigate();
   
-  const [requestStatus, setRequestStatus] = useState<"loading" | "approved" | "pending_join" | "pending_society" | "rejected_join" | "rejected_society" | "none">("loading");
+  const [requestStatus, setRequestStatus] = useState<"loading" | "approved" | "pending_join" | "pending_society" | "rejected_join" | "rejected_society" | "suspended_society" | "none">("loading");
   const [extraInfo, setExtraInfo] = useState<any>(null);
   const [societyName, setSocietyName] = useState("");
+  const [suspendedSociety, setSuspendedSociety] = useState<any>(null);
+  const [appealText, setAppealText] = useState("");
+  const [submittingAppeal, setSubmittingAppeal] = useState(false);
   const [showSurvey, setShowSurvey] = useState(false);
 
   const checkStatus = () => {
@@ -42,8 +46,22 @@ function AppLayout() {
       return;
     }
 
-    if (user.role === "owner" || user.societyId) {
+    if (user.role === "owner") {
       setRequestStatus("approved");
+      return;
+    }
+
+    if (user.societyId) {
+      societyService.getById(user.societyId).then((soc) => {
+        if (soc && (soc.status === "suspended" || soc.status === "inactive")) {
+          setSuspendedSociety(soc);
+          setRequestStatus("suspended_society");
+        } else {
+          setRequestStatus("approved");
+        }
+      }).catch(() => {
+        setRequestStatus("approved");
+      });
       return;
     }
 
@@ -83,6 +101,22 @@ function AppLayout() {
       setShowSurvey(!user.hasCompletedSurvey);
     }
   }, [loading, user, nav]);
+
+  useEffect(() => {
+    const handleSuspendedEvent = () => {
+      if (user?.societyId && user.role !== "owner") {
+        societyService.getById(user.societyId).then((soc) => {
+          if (soc) {
+            setSuspendedSociety(soc);
+            setRequestStatus("suspended_society");
+          }
+        });
+      }
+    };
+    window.addEventListener("cen:society_suspended", handleSuspendedEvent);
+    return () => window.removeEventListener("cen:society_suspended", handleSuspendedEvent);
+  }, [user]);
+
 
   if (loading || requestStatus === "loading") {
     return (
@@ -391,8 +425,149 @@ function AppLayout() {
     );
   }
 
+  if (requestStatus === "suspended_society") {
+    const isAdminOrCoord = user?.role === "admin" || user?.isCoordinator || user?.role === "coordinator";
+    const hasAppealed = !!suspendedSociety?.suspensionAppeal;
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50/50 p-4 sm:p-6 font-body relative overflow-hidden">
+        {/* Ambient background glows */}
+        <div className="absolute top-[-20%] left-[-10%] w-[55%] h-[55%] bg-[#fbeae9]/60 rounded-full blur-[130px] -z-10"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[55%] h-[55%] bg-[#ece9f5]/40 rounded-full blur-[130px] -z-10"></div>
+
+        <div className="w-full max-w-xl space-y-6 relative z-10">
+          <Card className="border-rose-200/80 shadow-2xl bg-white/95 backdrop-blur-md overflow-hidden rounded-3xl">
+            {/* Header Ribbon */}
+            <div className="bg-rose-50/80 border-b border-rose-100 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-700 uppercase tracking-widest">
+                <ShieldAlert className="h-4 w-4 text-rose-600 animate-pulse" />
+                <span>Operational Lockdown Active</span>
+              </div>
+              <Badge className="bg-rose-100 text-rose-800 border-rose-200 font-bold text-[10px] uppercase">
+                Suspended
+              </Badge>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6">
+              {/* Icon & Title */}
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
+                <div className="h-16 w-16 rounded-2xl bg-rose-100/70 border border-rose-200 flex items-center justify-center text-rose-600 flex-shrink-0 shadow-inner">
+                  <Lock className="h-8 w-8" />
+                </div>
+                <div className="space-y-1">
+                  <h2 className="text-xl sm:text-2xl font-bold text-ink tracking-tight font-headline">
+                    Community Operations Suspended
+                  </h2>
+                  <p className="text-xs text-on-surface-variant font-medium">
+                    Access to <span className="font-bold text-ink">{suspendedSociety?.name || "this community network"}</span> has been temporarily frozen by platform authorities.
+                  </p>
+                </div>
+              </div>
+
+              {/* Official Reason Notice Box */}
+              <div className="bg-rose-50/60 border border-rose-200/90 rounded-2xl p-4 sm:p-5 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-rose-900">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                  Official Platform Authority Notice
+                </div>
+                <p className="text-xs text-rose-800/90 leading-relaxed font-body pl-6">
+                  "{suspendedSociety?.suspensionReason || "This community network is currently suspended pending administrative investigation and compliance review."}"
+                </p>
+              </div>
+
+              {/* Coordinator / Admin Appeal Section */}
+              {isAdminOrCoord && (
+                <div className="bg-panel/40 border border-line/60 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-ink flex items-center gap-2">
+                      <HelpCircle className="h-4 w-4 text-deep-forest" />
+                      Administrative Revocation Appeal
+                    </span>
+                    <Badge variant="outline" className="text-[10px] text-slate-700 bg-white border-line">
+                      Admin / Coordinator
+                    </Badge>
+                  </div>
+
+                  {hasAppealed ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-1">
+                      <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Appeal Submitted & Pending Review
+                      </div>
+                      <p className="text-[11px] text-emerald-700 leading-normal pl-5">
+                        "{suspendedSociety.suspensionAppeal}"
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-on-surface-variant">
+                        As a community administrator, you may submit an official explanation to request revocation of this suspension:
+                      </p>
+                      <textarea
+                        value={appealText}
+                        onChange={(e) => setAppealText(e.target.value)}
+                        placeholder="Provide details on steps taken to address compliance concerns..."
+                        rows={2}
+                        className="w-full text-xs p-2.5 rounded-lg border border-line bg-white text-ink focus:outline-none focus:ring-1 focus:ring-deep-forest resize-none"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={submittingAppeal || !appealText.trim()}
+                        onClick={async () => {
+                          setSubmittingAppeal(true);
+                          try {
+                            const updated = await societyService.appealSuspension(suspendedSociety.id, appealText);
+                            toast.success("Appeal submitted to platform authorities for review.");
+                            setSuspendedSociety(updated);
+                          } catch (err: any) {
+                            toast.error(err.message || "Failed to submit appeal");
+                          } finally {
+                            setSubmittingAppeal(false);
+                          }
+                        }}
+                        className="bg-deep-forest hover:bg-deep-forest/90 text-white text-xs h-8 px-3 rounded-lg font-semibold cursor-pointer active:scale-98"
+                      >
+                        {submittingAppeal ? "Submitting..." : "Submit Appeal to Owner"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-3 pt-2">
+                <Button
+                  onClick={async () => {
+                    try {
+                      await userService.leaveSociety();
+                      toast.success("You have cleanly exited the suspended community.");
+                      window.location.href = "/app";
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to leave society");
+                    }
+                  }}
+                  className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer active:scale-98 transition-all flex items-center justify-center gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Leave Suspended Community & Choose Another
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => logout()}
+                  className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold text-ink cursor-pointer active:scale-98 transition-all"
+                >
+                  Sign Out
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (requestStatus === "none") {
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50/50 p-6 font-body relative overflow-hidden">
         {/* Ambient background glows */}

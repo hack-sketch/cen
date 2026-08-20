@@ -429,4 +429,77 @@ def test_society_application_rejection_remarks_and_resubmit(client, db_session):
     assert resub_res.json()["societyName"] == "Green Hills Enclave"
 
 
+def test_community_suspension_lockdown_guard_and_revocation(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society, Household
+
+    owner = create_user(db_session, UserCreate(name="Sys Owner", email="sysowner@cen.app", password="password123"), role="owner")
+    resident = create_user(db_session, UserCreate(name="Lock Resident", email="lockres@cen.app", password="password123"), role="resident")
+
+    soc = Society(name="North Star Society", address="500 Polar Way", admin_id=owner.id, capacity=50, key="NSTR-99")
+    db_session.add(soc)
+    db_session.commit()
+
+    hh = Household(society_id=soc.id, unit_number="N-101", max_members=4)
+    db_session.add(hh)
+    db_session.commit()
+
+    resident.society_id = soc.id
+    resident.household_id = hh.id
+    resident.is_coordinator = True
+    db_session.commit()
+
+    owner_login = client.post("/api/v1/auth/login", json={"email": "sysowner@cen.app", "password": "password123"})
+    owner_token = owner_login.json()["accessToken"]
+
+    res_login = client.post("/api/v1/auth/login", json={"email": "lockres@cen.app", "password": "password123"})
+    res_token = res_login.json()["accessToken"]
+
+    # 1. Owner suspends society with explicit reason
+    suspend_res = client.post(
+        f"/api/v1/societies/{soc.id}/suspend",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"reason": "Safety protocol compliance review."},
+    )
+    assert suspend_res.status_code == 200
+    assert suspend_res.json()["status"] == "suspended"
+    assert suspend_res.json()["suspensionReason"] == "Safety protocol compliance review."
+
+    # 2. Resident tries to perform an operational call (e.g. list marketplace items) -> Blocked with 403 & SOCIETY_SUSPENDED
+    blocked_res = client.get("/api/v1/marketplace/skills", headers={"Authorization": f"Bearer {res_token}"})
+    assert blocked_res.status_code == 403
+    assert blocked_res.json()["code"] == "SOCIETY_SUSPENDED"
+    assert "Safety protocol compliance review" in blocked_res.json()["detail"]
+
+    # 3. Resident can still query /users/me and society details
+    me_resp = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {res_token}"})
+    assert me_resp.status_code == 200
+
+    soc_resp = client.get(f"/api/v1/societies/{soc.id}")
+    assert soc_resp.status_code == 200
+    assert soc_resp.json()["status"] == "suspended"
+
+    # 4. Coordinator submits an appeal
+    appeal_res = client.post(
+        f"/api/v1/societies/{soc.id}/appeal-suspension",
+        headers={"Authorization": f"Bearer {res_token}"},
+        json={"appealReason": "Safety equipment certified and report attached."},
+    )
+    assert appeal_res.status_code == 200
+    assert appeal_res.json()["suspensionAppeal"] == "Safety equipment certified and report attached."
+
+    # 5. Resident can cleanly leave the suspended society
+    leave_res = client.post("/api/v1/users/me/leave-society", headers={"Authorization": f"Bearer {res_token}"})
+    assert leave_res.status_code == 200
+    assert leave_res.json()["societyId"] is None
+
+    # 6. Owner revokes suspension -> status becomes active
+    revoke_res = client.post(f"/api/v1/societies/{soc.id}/revoke-suspension", headers={"Authorization": f"Bearer {owner_token}"})
+    assert revoke_res.status_code == 200
+    assert revoke_res.json()["status"] == "active"
+    assert revoke_res.json()["suspensionReason"] is None
+
+
+
 

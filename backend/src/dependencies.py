@@ -1,18 +1,20 @@
 from typing import List, Optional
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from sqlalchemy.orm import Session
 
 from src.config import settings
 from src.database import get_db
-from src.exceptions import ForbiddenException, UnauthorizedException
+from src.exceptions import ForbiddenException, UnauthorizedException, APIException
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
 
 def get_current_user_from_token(
-    token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ):
     if not token:
         raise UnauthorizedException("Authentication token required")
@@ -35,7 +37,35 @@ def get_current_user_from_token(
         raise ForbiddenException("Your account has been deactivated by society administration.")
     if not user.is_household_enabled:
         raise ForbiddenException("Your household access has been suspended by your Primary Resident Lead.")
+
+    # Strict Community Suspension Lockdown Guard
+    if user.society_id and user.role != "owner":
+        from src.societies.models import Society
+
+        soc = db.query(Society).filter(Society.id == user.society_id).first()
+        if soc and soc.status in ["suspended", "inactive"]:
+            path = request.url.path if request else ""
+            allowed_prefixes = [
+                "/api/v1/users/me",
+                "/api/v1/users/me/leave-society",
+                f"/api/v1/societies/{user.society_id}",
+            ]
+            is_allowed = any(
+                path.rstrip("/") == p.rstrip("/")
+                or path.startswith(f"/api/v1/societies/{user.society_id}")
+                or path == "/api/v1/users/me/leave-society"
+                for p in allowed_prefixes
+            )
+            if not is_allowed:
+                reason_text = soc.suspension_reason or "Under administrative investigation by platform authorities."
+                raise APIException(
+                    status_code=403,
+                    detail=f"Community network '{soc.name}' is currently suspended by platform authorities. Reason: {reason_text}",
+                    code="SOCIETY_SUSPENDED",
+                )
+
     return user
+
 
 
 def require_roles(allowed_roles: List[str]):

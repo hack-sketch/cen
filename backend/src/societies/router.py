@@ -17,7 +17,11 @@ from src.societies.schemas import (
     SocietyRejectPayload,
     SocietyConfigUpdate,
     SocietyResponse,
+    SocietySuspendPayload,
+    SocietyAppealPayload,
 )
+
+
 
 from src.users.models import User
 
@@ -130,13 +134,42 @@ def update_config(
 @router.post("/societies/{society_id}/suspend", response_model=SocietyResponse)
 def suspend(
     society_id: str,
+    payload: Optional[SocietySuspendPayload] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["owner"])),
 ):
-    soc = soc_service.suspend_society(db, society_id)
+    reason = payload.reason if payload and payload.reason else "Suspended by platform authority."
+    soc = soc_service.suspend_society(db, society_id, reason=reason)
     res = SocietyResponse.model_validate(soc)
     res.is_operational = soc_service.is_society_operational(soc, db)
     return res
+
+
+@router.post("/societies/{society_id}/revoke-suspension", response_model=SocietyResponse)
+@router.post("/societies/{society_id}/unsuspend", response_model=SocietyResponse)
+def revoke_suspension(
+    society_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["owner"])),
+):
+    soc = soc_service.revoke_society_suspension(db, society_id)
+    res = SocietyResponse.model_validate(soc)
+    res.is_operational = soc_service.is_society_operational(soc, db)
+    return res
+
+
+@router.post("/societies/{society_id}/appeal-suspension", response_model=SocietyResponse)
+def appeal_suspension(
+    society_id: str,
+    payload: SocietyAppealPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    soc = soc_service.appeal_society_suspension(db, society_id, payload.appeal_reason)
+    res = SocietyResponse.model_validate(soc)
+    res.is_operational = soc_service.is_society_operational(soc, db)
+    return res
+
 
 
 @router.get("/societies/{society_id}", response_model=SocietyResponse)

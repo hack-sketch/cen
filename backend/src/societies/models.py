@@ -36,9 +36,15 @@ class Society(Base):
     household_range_start = Column(Integer, nullable=False, default=1)
     household_range_end = Column(Integer, nullable=False, default=100)
     coordinator_count = Column(Integer, nullable=False, default=0)
+
     status = Column(String, nullable=False, default="active")  # pending | active | suspended
+    suspension_reason = Column(String, nullable=True)
+    suspension_appeal = Column(String, nullable=True)
+    suspension_appeal_date = Column(String, nullable=True)
     performance_score = Column(Integer, nullable=False, default=100)
     key = Column(String, nullable=False, unique=True, index=True)
+
+
 
 
 class SocietyApplication(Base):
