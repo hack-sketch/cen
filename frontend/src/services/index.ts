@@ -4,7 +4,8 @@
 // ============================================================================
 
 import * as mock from "@/mocks/data";
-import { apiFetch, clearStoredAuth, getStoredUser, setStoredAuth } from "./apiClient";
+import { apiFetch, clearStoredAuth, getStoredToken, getStoredUser, setStoredAuth } from "./apiClient";
+
 
 const delay = <T>(v: T, ms = 0): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(v), ms));
@@ -607,12 +608,63 @@ export const userService = {
   leaveSociety: async () => {
     try {
       const res = await apiFetch<any>("/users/me/leave-society", { method: "POST" });
-      if (res) return res;
+      if (res) {
+        const storedUser = getStoredUser();
+        if (storedUser) {
+          setStoredAuth(getStoredToken() || "", {
+            ...storedUser,
+            societyId: null,
+            householdId: null,
+            isCoordinator: false,
+            isPrimaryResident: false,
+            role: storedUser.role === "owner" ? "owner" : "resident",
+            idProofUploaded: false,
+            idProofVerified: false,
+            idProofUrl: null,
+          });
+        }
+        return res;
+      }
     } catch (err: any) {
       if (err.message) throw err;
     }
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      const u = state.users.find((x) => x.id === storedUser.id);
+      if (u) {
+        u.societyId = undefined;
+        u.householdId = undefined;
+        u.isCoordinator = false;
+        u.isPrimaryResident = false;
+        if (u.role !== "owner") u.role = "resident";
+        u.idProofUploaded = false;
+        u.idProofVerified = false;
+        u.idProofUrl = undefined;
+      }
+      // Free claimed households
+      const hh = state.households.find((h) => h.claimedByUserId === storedUser.id);
+      if (hh) {
+        hh.claimed = false;
+        hh.claimedByUserId = undefined;
+        hh.occupantsCount = Math.max(0, (hh.occupantsCount || 1) - 1);
+      }
+      state.joinRequests = state.joinRequests.filter((jr) => jr.userId !== storedUser.id);
+      setStoredAuth(getStoredToken() || "mock-token-123", {
+        ...storedUser,
+        societyId: null,
+        householdId: null,
+        isCoordinator: false,
+        isPrimaryResident: false,
+        role: storedUser.role === "owner" ? "owner" : "resident",
+        idProofUploaded: false,
+        idProofVerified: false,
+        idProofUrl: null,
+      });
+      return delay(u);
+    }
     return delay(true);
   },
+
   disableHouseholdAccess: async (userId: string) => {
     try {
       await apiFetch<any>(`/users/${userId}/disable-household-access`, { method: "POST" });

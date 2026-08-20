@@ -195,17 +195,24 @@ def test_society_search_by_name(client, db_session):
 def test_resident_leave_society_atomic(client, db_session):
     from src.auth.service import create_user
     from src.users.schemas import UserCreate
-    from src.societies.models import Society, Household
+    from src.societies.models import Society, Household, JoinRequest
 
     user = create_user(db_session, UserCreate(name="Leaving Res", email="leave@cen.app", password="password123"), role="resident")
-    soc = Society(name="Leave Soc", address="1 Leave Rd", admin_id=user.id, key="LEAVE-1")
+    soc = Society(name="Leave Soc", address="1 Leave Rd", admin_id=user.id, key="LEAVE-1", coordinator_count=1)
     db_session.add(soc)
     db_session.flush()
 
-    hh = Household(id="h-leave-1", society_id=soc.id, unit_number="L-1", claimed=True, claimed_by_user_id=user.id)
+    hh = Household(id="h-leave-1", society_id=soc.id, unit_number="L-1", claimed=True, claimed_by_user_id=user.id, occupants_count=1)
     db_session.add(hh)
     user.society_id = soc.id
     user.household_id = hh.id
+    user.is_coordinator = True
+    user.id_proof_uploaded = True
+    user.id_proof_verified = True
+
+    # Add a join request that should be wiped
+    jr = JoinRequest(user_id=user.id, user_name=user.name, society_id=soc.id, household_id=hh.id, unit_number="L-1", status="approved")
+    db_session.add(jr)
     db_session.commit()
 
     # Login to get token
@@ -218,11 +225,25 @@ def test_resident_leave_society_atomic(client, db_session):
     data = leave_res.json()
     assert data["societyId"] is None
     assert data["householdId"] is None
+    assert data["isCoordinator"] is False
+    assert data["idProofUploaded"] is False
+    assert data["idProofVerified"] is False
 
     # Check database state
     db_session.refresh(hh)
     assert hh.claimed is False
     assert hh.claimed_by_user_id is None
+    assert hh.occupants_count == 0
+
+    # Ensure join requests are wiped
+    remaining_jrs = db_session.query(JoinRequest).filter(JoinRequest.user_id == user.id).all()
+    assert len(remaining_jrs) == 0
+
+    # Calling leave again should fail with NOT_IN_SOCIETY
+    leave_again = client.post("/api/v1/users/me/leave-society", headers={"Authorization": f"Bearer {token}"})
+    assert leave_again.status_code == 400
+    assert leave_again.json()["code"] == "NOT_IN_SOCIETY"
+
 
 
 def test_deactivate_and_login_rejection(client, db_session):

@@ -26,8 +26,9 @@ export const Route = createFileRoute("/app/profile")({ component: Page });
 
 function Page() {
   const navigate = useNavigate();
-  const { user, setUserById } = useAuth();
+  const { user, setUserById, refetchUser } = useAuth();
   const qc = useQueryClient();
+
 
   const soc = useQuery({ 
     queryKey: ["soc", user?.societyId], 
@@ -340,9 +341,13 @@ function Page() {
                 try {
                   await userService.leaveSociety();
                   await setUserById(user!.id);
-                  qc.invalidateQueries();
-                  toast.success("Successfully left society.");
-                  navigate({ to: "/join-society" });
+                  if (typeof refetchUser === "function") {
+                    await refetchUser();
+                  }
+                  localStorage.removeItem("cen.coordViewMode");
+                  qc.clear();
+                  toast.success("Successfully left society. Please select or request a society.");
+                  navigate({ to: "/app" });
                 } catch (err: any) {
                   toast.error(err.message || "Failed to leave society");
                 } finally {
@@ -353,6 +358,7 @@ function Page() {
             >
               Confirm Leave
             </AlertDialogAction>
+
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

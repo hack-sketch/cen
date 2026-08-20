@@ -111,19 +111,50 @@ def leave_society(db: Session, user_id: str) -> User:
     try:
         user = get_user_by_id(db, user_id)
         if not user.society_id:
-            raise APIException(status_code=400, detail="User is not currently attached to any society.", code="NOT_IN_SOCIETY")
-        
-        # Unclaim claimed household transactionally
+            raise APIException(
+                status_code=400,
+                detail="User is not currently attached to any society.",
+                code="NOT_IN_SOCIETY",
+            )
+
+        from src.societies.models import Household, Society, JoinRequest
+
+        # 1. Unclaim and free occupied slots in user's household
         if user.household_id:
             hh = db.query(Household).filter(Household.id == user.household_id).first()
-            if hh and hh.claimed_by_user_id == user.id:
-                hh.claimed = False
-                hh.claimed_by_user_id = None
-        
+            if hh:
+                hh.occupants_count = max(0, (hh.occupants_count or 1) - 1)
+                if hh.claimed_by_user_id == user.id:
+                    hh.claimed = False
+                    hh.claimed_by_user_id = None
+
+        # Also check all households where claimed_by_user_id == user.id
+        claimed_hhs = db.query(Household).filter(Household.claimed_by_user_id == user.id).all()
+        for ch in claimed_hhs:
+            ch.claimed = False
+            ch.claimed_by_user_id = None
+            ch.occupants_count = max(0, (ch.occupants_count or 1) - 1)
+
+        # 2. Update society coordinator count if user was a coordinator
+        if user.society_id and user.is_coordinator:
+            soc = db.query(Society).filter(Society.id == user.society_id).first()
+            if soc:
+                soc.coordinator_count = max(0, (soc.coordinator_count or 1) - 1)
+
+        # 3. Clean up any active join requests for this user
+        db.query(JoinRequest).filter(JoinRequest.user_id == user.id).delete()
+
+        # 4. Nullify user bindings and reset role/privileges cleanly
         user.society_id = None
         user.household_id = None
-        if user.role == "coordinator":
-            user.is_coordinator = False
+        user.is_coordinator = False
+        user.is_primary_resident = False
+        user.can_manage_onboarding = True
+        user.can_deactivate_residents = False
+        user.id_proof_uploaded = False
+        user.id_proof_verified = False
+        user.id_proof_url = None
+        if user.role in ["coordinator", "admin"]:
             user.role = "resident"
 
         db.commit()
@@ -132,6 +163,7 @@ def leave_society(db: Session, user_id: str) -> User:
     except Exception as e:
         db.rollback()
         raise e
+
 
 
 def disable_household_access(db: Session, target_user_id: str, acting_user: User) -> User:

@@ -17,8 +17,11 @@ export interface User {
   creditBalance: number;
   joinedDate: string;
   idProofUploaded: boolean;
+  idProofVerified?: boolean;
+  idProofUrl?: string;
   isCoordinator: boolean;
   avatarColor?: string;
+
   interests?: string[];
   offeredSkillsText?: string;
   volunteerInterest?: string;
