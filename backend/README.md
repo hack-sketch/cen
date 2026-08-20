@@ -1,6 +1,6 @@
 # Community Exchange Network (CEN) — FastAPI Backend API
 
-This repository contains the RESTful FastAPI backend for the **Community Exchange Network (CEN)** platform — a hyper-local time-banking, skill discovery, and resource-sharing application built for residential societies.
+This repository contains the RESTful FastAPI backend for the **Community Exchange Network (CEN)** platform — a hyper-local skill exchange, shared resource discovery, and community governance application built for residential societies.
 
 ---
 
@@ -69,7 +69,7 @@ SECRET_KEY="your-secret-key-for-jwt-signing"
 ALGORITHM="HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES=10080
 
-# (Optional) Google Gemini API Key for AI features (Auto-tagging, Chatbot, ID Proof Vision)
+# Google Gemini API Key for AI features (Chatbot, Auto-tagging, Summarizer, Matching)
 GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE"
 
 # Local SQLite Database URL
@@ -80,9 +80,35 @@ DATABASE_URL="sqlite:///./cen.db"
 
 ---
 
+## 🤖 Setting Up Google Gemini AI Features
+
+CEN features 6 integrated AI features powered by **Google Gemini LLM** (via `backend/src/ai/`):
+
+1. **Smart AI Assistant / Chatbot (`POST /api/v1/ai/chatbot`)**: Multi-turn RAG assistant using live resident wallet balance, active notices, listings, and society guidelines to provide contextual answers.
+2. **Automated Content Auto-Tagging (`POST /api/v1/ai/auto-tag`)**: Extracts searchable category tags from skill and resource descriptions.
+3. **Complaint Urgency Classifier (`POST /api/v1/ai/categorize-complaint`)**: Classifies resident complaints and assigns priority levels (`high`, `medium`, `low`).
+4. **Noticeboard Summarizer (`POST /api/v1/ai/summarize-notice`)**: Condenses lengthy society announcements into clear, one-sentence summaries.
+5. **Natural Language Marketplace Matcher (`POST /api/v1/ai/match-marketplace`)**: Semantic matching connecting free-text resident requests to local skills and tools.
+6. **AI Volunteer Candidate Recommender (`GET /api/v1/ai/suggest-volunteers`)**: Analyzes resident 3-step onboarding survey responses to recommend the best candidates for community event rosters.
+
+### 🔑 How to Obtain & Configure your Gemini API Key
+
+1. Visit [Google AI Studio](https://aistudio.google.com/).
+2. Sign in with your Google account and click **"Get API key"** (or **"Create API key in new project"**).
+3. Copy your API key.
+4. Paste it into your `backend/.env` file:
+   ```env
+   GEMINI_API_KEY="AIzaSy..."
+   ```
+5. Restart the backend server. The AI services will immediately use live Gemini LLM generation.
+
+> 🛡️ **Built-in Heuristic Fallbacks**: If `GEMINI_API_KEY` is not provided or if the remote Google API is offline, all AI endpoints automatically switch to intelligent local heuristic/rule-based fallbacks. The application and test suite will run seamlessly without crashing.
+
+---
+
 ### Step 5: Seed Demo Data (Optional but Recommended)
 
-To seed the local database with pre-populated demo societies, households, users, skills, and resources:
+To seed the local database with pre-populated demo societies, households, users, skills, resources, notices, and disputes:
 
 ```bash
 python src/seed.py
@@ -108,7 +134,7 @@ The backend server will start at **`http://127.0.0.1:8000`**.
 
 ## 🧪 Running Pytest Automated Tests
 
-To run the complete automated test suite (31 integration & unit tests):
+To run the complete automated test suite (38 integration & unit tests):
 
 ```bash
 python run_tests.py
@@ -151,16 +177,17 @@ backend/
 │   ├── auth/             # JWT Authentication & Passwords
 │   ├── users/            # Resident Profile Management & RBAC
 │   ├── societies/        # Society Onboarding & Household Slots
-│   ├── wallet/           # Time-Credit Banking & Ledger
-│   ├── marketplace/      # Skill Exchange & Resource Lending
+│   ├── wallet/           # Community Credit Banking & Ledger
+│   ├── marketplace/      # Skill Exchange & Resource Lending Lifecycles
 │   ├── events/           # Community Events & Volunteering
 │   ├── complaints/       # Facility Complaints & Audits
 │   ├── notices/          # Noticeboard Broadcasts
 │   ├── chat/             # Direct Resident Messaging
-│   ├── ai/               # Gemini AI Chatbot, Vision ID, Auto-Tagging
+│   ├── ai/               # Gemini AI Chatbot, Auto-Tagging, Matching, Summarizer
+│   ├── disputes/         # Trade Exchange Dispute Moderation
 │   ├── analytics/        # Owner & Admin Performance Metrics
 │   ├── config.py         # Application settings
 │   ├── database.py       # SQLAlchemy engine & session maker
 │   └── main.py           # FastAPI application entry point
-└── tests/                # Pytest Test Suite (31 test cases)
+└── tests/                # Pytest Test Suite (38 test cases across 10 modules)
 ```
