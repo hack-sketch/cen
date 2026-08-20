@@ -154,3 +154,141 @@ def test_book_skill_and_credit_direction(client, db_session):
     db_session.refresh(provider)
     assert booker.credit_balance == 38
     assert provider.credit_balance == 22
+
+
+def test_coordinator_rejection_requires_reason_and_records_remarks(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.marketplace.models import Skill, Resource
+
+    owner = create_user(db_session, UserCreate(name="Owner", email="owner_rej@cen.app", password="password123"), role="owner")
+    soc = Society(name="Rej Society", address="5 Rej St", admin_id=owner.id, capacity=50, key="REJ-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    coord = create_user(db_session, UserCreate(name="Coord Rej", email="coord_rej@cen.app", password="password123"), role="coordinator")
+    coord.is_coordinator = True
+    coord.society_id = soc.id
+
+    resident = create_user(db_session, UserCreate(name="Resident Prov", email="res_rej@cen.app", password="password123"), role="resident")
+    resident.society_id = soc.id
+    db_session.commit()
+
+    sk = Skill(title="Unclear Skill", category="General", provider_id=resident.id, provider_name=resident.name, credits=10, description="help with stuff", status="pending", society_id=soc.id)
+    res = Resource(name="Broken Lawn Mower", category="Tools", owner_id=resident.id, owner_name=resident.name, available=True, credits=2, description="mower missing blades", status="pending", society_id=soc.id)
+    db_session.add(sk)
+    db_session.add(res)
+    db_session.commit()
+
+    login_resp = client.post("/api/v1/auth/login", json={"email": "coord_rej@cen.app", "password": "password123"})
+    coord_token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    headers = {"Authorization": f"Bearer {coord_token}"}
+
+    # 1. Rejecting without reason or empty string fails
+    empty_rej_resp = client.post(f"/api/v1/marketplace/skills/{sk.id}/reject", json={"rejectionReason": ""}, headers=headers)
+    assert empty_rej_resp.status_code in [400, 422]
+
+    # 2. Rejecting skill with valid feedback succeeds
+    valid_rej_resp = client.post(
+        f"/api/v1/marketplace/skills/{sk.id}/reject",
+        json={"rejectionReason": "Please provide a more detailed syllabus and prerequisite requirements."},
+        headers=headers,
+    )
+    assert valid_rej_resp.status_code == 200
+    sk_data = valid_rej_resp.json()
+    assert sk_data["status"] == "rejected"
+    assert sk_data["rejectionReason"] == "Please provide a more detailed syllabus and prerequisite requirements."
+
+    # 3. Rejecting resource with valid feedback succeeds
+    res_rej_resp = client.post(
+        f"/api/v1/marketplace/resources/{res.id}/reject",
+        json={"rejectionReason": "Tools must be in full working condition with safety guard installed."},
+        headers=headers,
+    )
+    assert res_rej_resp.status_code == 200
+    res_data = res_rej_resp.json()
+    assert res_data["status"] == "rejected"
+    assert res_data["rejectionReason"] == "Tools must be in full working condition with safety guard installed."
+
+
+def test_resident_edit_and_resubmit_workflow(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.marketplace.models import Skill, Resource
+
+    owner = create_user(db_session, UserCreate(name="Owner", email="owner_edit@cen.app", password="password123"), role="owner")
+    soc = Society(name="Edit Society", address="6 Edit St", admin_id=owner.id, capacity=50, key="EDIT-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    coord = create_user(db_session, UserCreate(name="Coord Reviewer", email="coord_rev@cen.app", password="password123"), role="coordinator")
+    coord.is_coordinator = True
+    coord.society_id = soc.id
+
+    resident = create_user(db_session, UserCreate(name="Resident Editor", email="res_edit@cen.app", password="password123"), role="resident")
+    resident.society_id = soc.id
+    db_session.commit()
+
+    # Pre-existing rejected listings
+    sk = Skill(title="Old Skill", category="General", provider_id=resident.id, provider_name=resident.name, credits=10, description="Old description", status="rejected", rejection_reason="Too vague", society_id=soc.id)
+    res = Resource(name="Old Tool", category="Tools", owner_id=resident.id, owner_name=resident.name, available=False, credits=5, description="Needs repair", status="rejected", rejection_reason="Clarify safety", society_id=soc.id)
+    db_session.add(sk)
+    db_session.add(res)
+    db_session.commit()
+
+    # Resident logs in to edit & resubmit
+    login_resp = client.post("/api/v1/auth/login", json={"email": "res_edit@cen.app", "password": "password123"})
+    res_token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    res_headers = {"Authorization": f"Bearer {res_token}"}
+
+    # 1. Edit skill -> status automatically shifts to pending and rejection_reason is cleared
+    edit_sk_resp = client.put(
+        f"/api/v1/marketplace/skills/{sk.id}",
+        json={
+            "title": "Comprehensive Calculus Tutoring",
+            "category": "Tutoring",
+            "credits": 6,
+            "description": "Step-by-step calculus exam preparation with practice sheets.",
+            "tags": ["math", "calculus", "tutoring"],
+        },
+        headers=res_headers,
+    )
+    assert edit_sk_resp.status_code == 200
+    sk_updated = edit_sk_resp.json()
+    assert sk_updated["title"] == "Comprehensive Calculus Tutoring"
+    assert sk_updated["status"] == "pending"
+    assert sk_updated["rejectionReason"] is None
+
+    # 2. Edit resource -> status automatically shifts to pending, available=True, rejection_reason is cleared
+    edit_res_resp = client.put(
+        f"/api/v1/marketplace/resources/{res.id}",
+        json={
+            "name": "High-Pressure Washer (Safety Tested)",
+            "category": "Tools",
+            "credits": 4,
+            "description": "Complete washer unit with safety lock and 10m extension hose.",
+        },
+        headers=res_headers,
+    )
+    assert edit_res_resp.status_code == 200
+    res_updated = edit_res_resp.json()
+    assert res_updated["name"] == "High-Pressure Washer (Safety Tested)"
+    assert res_updated["status"] == "pending"
+    assert res_updated["available"] is True
+    assert res_updated["rejectionReason"] is None
+
+    # 3. Coordinator logs in and approves newly resubmitted items
+    coord_login = client.post("/api/v1/auth/login", json={"email": "coord_rev@cen.app", "password": "password123"})
+    coord_token = coord_login.json().get("accessToken") or coord_login.json().get("access_token")
+    coord_headers = {"Authorization": f"Bearer {coord_token}"}
+
+    appr_sk = client.post(f"/api/v1/marketplace/skills/{sk.id}/approve", headers=coord_headers)
+    assert appr_sk.status_code == 200
+    assert appr_sk.json()["status"] == "approved"
+
+    appr_res = client.post(f"/api/v1/marketplace/resources/{res.id}/approve", headers=coord_headers)
+    assert appr_res.status_code == 200
+    assert appr_res.json()["status"] == "approved"
+

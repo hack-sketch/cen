@@ -102,7 +102,8 @@ export interface Skill {
   providerName: string;
   credits: number;
   description: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "deleted";
+  rejectionReason?: string;
   tags: string[];
   societyId: string;
 }
@@ -115,10 +116,12 @@ export interface Resource {
   ownerName: string;
   available: boolean;
   credits: number;
-  status: "pending" | "approved" | "rejected" | "returned" | "borrowed";
+  status: "pending" | "approved" | "rejected" | "returned" | "borrowed" | "deleted";
+  rejectionReason?: string;
   description: string;
   societyId: string;
 }
+
 
 export interface Transaction {
   id: string;

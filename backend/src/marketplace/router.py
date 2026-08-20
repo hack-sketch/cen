@@ -7,10 +7,13 @@ from src.dependencies import get_current_user_from_token, require_roles
 from src.marketplace import service as mp_service
 from src.marketplace.schemas import (
     ExchangeBookingResponse,
+    ItemRejectPayload,
     ResourceCreate,
     ResourceResponse,
+    ResourceUpdate,
     SkillCreate,
     SkillResponse,
+    SkillUpdate,
 )
 from src.users.models import User
 
@@ -45,6 +48,16 @@ def create_skill(
     return mp_service.create_skill(db, current_user, skill_in)
 
 
+@router.put("/skills/{skill_id}", response_model=SkillResponse)
+def update_skill(
+    skill_id: str,
+    skill_in: SkillUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.update_skill(db, current_user, skill_id, skill_in)
+
+
 @router.post("/skills/{skill_id}/approve", response_model=SkillResponse)
 def approve_skill(
     skill_id: str,
@@ -57,10 +70,11 @@ def approve_skill(
 @router.post("/skills/{skill_id}/reject", response_model=SkillResponse)
 def reject_skill(
     skill_id: str,
+    payload: ItemRejectPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
 ):
-    return mp_service.reject_skill(db, current_user, skill_id)
+    return mp_service.reject_skill(db, current_user, skill_id, payload)
 
 
 @router.post("/skills/{skill_id}/book", response_model=ExchangeBookingResponse)
@@ -100,6 +114,16 @@ def create_resource(
     return mp_service.create_resource(db, current_user, res_in)
 
 
+@router.put("/resources/{resource_id}", response_model=ResourceResponse)
+def update_resource(
+    resource_id: str,
+    res_in: ResourceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.update_resource(db, current_user, resource_id, res_in)
+
+
 @router.post("/resources/{resource_id}/approve", response_model=ResourceResponse)
 def approve_resource(
     resource_id: str,
@@ -112,10 +136,12 @@ def approve_resource(
 @router.post("/resources/{resource_id}/reject", response_model=ResourceResponse)
 def reject_resource(
     resource_id: str,
+    payload: ItemRejectPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
 ):
-    return mp_service.reject_resource(db, current_user, resource_id)
+    return mp_service.reject_resource(db, current_user, resource_id, payload)
+
 
 
 @router.post("/resources/{resource_id}/book", response_model=ExchangeBookingResponse)

@@ -27,6 +27,7 @@ class Skill(Base):
     credits = Column(Integer, nullable=False, default=1)
     description = Column(String, nullable=False)
     status = Column(String, nullable=False, default="pending")  # pending | approved | rejected
+    rejection_reason = Column(String, nullable=True)
     tags = Column(String, nullable=True)  # Comma-separated
     society_id = Column(String, nullable=False, index=True)
 
@@ -42,8 +43,10 @@ class Resource(Base):
     available = Column(Boolean, nullable=False, default=True)
     credits = Column(Integer, nullable=False, default=1)
     status = Column(String, nullable=False, default="pending")  # pending | approved | rejected
+    rejection_reason = Column(String, nullable=True)
     description = Column(String, nullable=False)
     society_id = Column(String, nullable=False, index=True)
+
 
 
 class ExchangeBooking(Base):

@@ -36,7 +36,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Sparkles, Plus, Search, Filter, HelpCircle, Package, ArrowRight, Clock, CheckCircle2, XCircle, Trash2, RotateCw } from "lucide-react";
+import { Sparkles, Plus, Search, Filter, HelpCircle, Package, ArrowRight, Clock, CheckCircle2, XCircle, Trash2, RotateCw, AlertCircle, Edit3 } from "lucide-react";
+
 import { cn, getInitials } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/resources")({ component: Page });
@@ -447,7 +448,11 @@ function Page() {
                             </Button>
                           )}
 
-                          {(isReturned || isRejected || r.status === "deleted" || (!r.available && !isBorrowed && !isPending)) && (
+                          {isRejected && (
+                            <EditResourceDialog resource={r} />
+                          )}
+
+                          {(isReturned || r.status === "deleted" || (!r.available && !isBorrowed && !isPending && !isRejected)) && (
                             <Button
                               size="sm"
                               className="h-8 text-xs font-bold px-3 bg-soft-violet hover:bg-soft-violet/90 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
@@ -496,6 +501,19 @@ function Page() {
                           )}
                         </div>
                       </div>
+
+                      {isRejected && (
+                        <div className="p-3 bg-rose-50/80 border border-rose-200 rounded-xl space-y-1 text-xs">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-800 text-[11px]">
+                            <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                            <span>Coordinator Rejection Feedback:</span>
+                          </div>
+                          <p className="text-rose-900/90 italic pl-5 text-[11.5px] leading-relaxed">
+                            "{r.rejectionReason || "Listing requires revisions before it can be approved. Please click Edit & Resubmit to update the details."}"
+                          </p>
+                        </div>
+                      )}
+
 
                       {itemRequests.length > 0 && (
                         <div className="pt-2 border-t border-amber-200/60 bg-amber-50/40 -mx-4 -mb-4 p-3.5 rounded-b-xl space-y-2">
@@ -731,3 +749,172 @@ function NewResDialog() {
     </Dialog>
   );
 }
+
+function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Resource }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const form = useForm<ResourceFormValues>({
+    resolver: zodResolver(resourceFormSchema),
+    defaultValues: {
+      name: resource.name,
+      description: resource.description,
+      category: resource.category,
+      credits: resource.credits,
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: resource.name,
+        description: resource.description,
+        category: resource.category,
+        credits: resource.credits,
+      });
+    }
+  }, [open, resource, form]);
+
+  const onSubmit = async (values: ResourceFormValues) => {
+    setLoading(true);
+    try {
+      await resourceService.update(resource.id, {
+        name: values.name,
+        description: values.description,
+        category: values.category,
+        credits: values.credits,
+      });
+      setOpen(false);
+      qc.invalidateQueries();
+      toast.success("Resource listing updated and resubmitted for coordinator review!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update resource.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          className="h-8 text-xs font-bold px-3 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
+        >
+          <Edit3 className="h-3.5 w-3.5" /> Edit & Resubmit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md bg-white border-line/60 rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+            <Edit3 className="h-4 w-4 text-amber-600" />
+            Edit & Resubmit Resource
+          </DialogTitle>
+          <CardDescription className="text-xs text-on-surface-variant">
+            Update your item details to address coordinator feedback. Resubmitting will shift status back to pending review.
+          </CardDescription>
+        </DialogHeader>
+
+        {resource.rejectionReason && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1 text-xs my-2">
+            <div className="flex items-center gap-1.5 font-bold text-rose-800 text-[11px]">
+              <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+              <span>Feedback to address:</span>
+            </div>
+            <p className="text-rose-900/90 italic pl-5 text-[11.5px]">"{resource.rejectionReason}"</p>
+          </div>
+        )}
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-1">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Item Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. Cordless Power Drill Set" 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Description & Rules</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Describe the item condition, lending duration limit, and return guidelines..." 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60 min-h-[80px]"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-bold text-ink">Category</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="e.g. Tools, Electronics" 
+                        {...field} 
+                        className="h-9 text-xs rounded-lg border-line-strong/60"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[10px] text-destructive" />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="credits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-bold text-ink">Credits (Lending rate)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={1} 
+                        {...field} 
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                        className="h-9 text-xs rounded-lg border-line-strong/60"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[10px] text-destructive" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold h-[38px] rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all"
+            >
+              {loading ? "Saving & Resubmitting..." : "Save Changes & Resubmit for Review"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

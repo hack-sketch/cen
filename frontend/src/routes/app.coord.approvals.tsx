@@ -22,6 +22,8 @@ import {
 import { CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { Textarea } from "@/components/ui/textarea";
+
 export const Route = createFileRoute("/app/coord/approvals")({ component: Page });
 
 function Page() {
@@ -68,6 +70,12 @@ function Page() {
 function SkillsList({ items, readonly }: { items: import("@/mocks/data").Skill[]; readonly?: boolean }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ type: "approve" | "reject"; id: string; title: string } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const handleOpen = (type: "approve" | "reject", id: string, title: string) => {
+    setConfirm({ type, id, title });
+    setRejectionReason("");
+  };
 
   return (
     <div className="space-y-3">
@@ -86,8 +94,8 @@ function SkillsList({ items, readonly }: { items: import("@/mocks/data").Skill[]
               </div>
               {!readonly && (
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setConfirm({ type: "approve", id: s.id, title: s.title })} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-[32px] px-3.5 cursor-pointer shadow-sm active:scale-98 transition-all">Approve</Button>
-                  <Button size="sm" variant="outline" onClick={() => setConfirm({ type: "reject", id: s.id, title: s.title })} className="text-xs font-semibold h-[32px] px-3.5 border-line-strong hover:bg-panel cursor-pointer active:scale-98 transition-all">Reject</Button>
+                  <Button size="sm" onClick={() => handleOpen("approve", s.id, s.title)} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-[32px] px-3.5 cursor-pointer shadow-sm active:scale-98 transition-all">Approve</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleOpen("reject", s.id, s.title)} className="text-xs font-semibold h-[32px] px-3.5 border-line-strong hover:bg-panel cursor-pointer active:scale-98 transition-all text-rose-600 border-rose-200 hover:bg-rose-50">Reject</Button>
                 </div>
               )}
               {readonly && <Badge variant="secondary" className="pointer-events-none uppercase text-[8.5px] font-bold">Pending Review</Badge>}
@@ -98,7 +106,7 @@ function SkillsList({ items, readonly }: { items: import("@/mocks/data").Skill[]
       {items.length === 0 && <div className="py-8 text-center text-xs text-on-surface-variant border border-dashed border-line rounded-xl bg-white">Nothing to review.</div>}
 
       <AlertDialog open={!!confirm} onOpenChange={(open) => !open && setConfirm(null)}>
-        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-md p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           <AlertDialogHeader className="space-y-2">
             <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
               {confirm?.type === "approve" ? (
@@ -116,34 +124,55 @@ function SkillsList({ items, readonly }: { items: import("@/mocks/data").Skill[]
             <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
               {confirm?.type === "approve" 
                 ? `Are you sure you want to approve the skill "${confirm?.title}" to be listed in the marketplace?`
-                : `Are you sure you want to reject the listing request for "${confirm?.title}"?`
+                : `Please provide a clear reason explaining why "${confirm?.title}" is being declined so the resident can modify and resubmit it.`
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {confirm?.type === "reject" && (
+            <div className="space-y-1.5 pt-2">
+              <label className="text-[11px] font-bold text-ink flex items-center gap-1">
+                <span>Reason for Rejection</span>
+                <span className="text-rose-600 font-extrabold">*</span>
+              </label>
+              <Textarea
+                placeholder="Explain the required changes (e.g., provide more details in description, adjust credit pricing, or clarify skill scope)..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="text-xs min-h-[90px] rounded-lg border-line-strong/70 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20 resize-none bg-panel/30"
+              />
+            </div>
+          )}
+
           <AlertDialogFooter className="mt-5 flex gap-2">
             <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction 
+              disabled={confirm?.type === "reject" && !rejectionReason.trim()}
               onClick={async () => {
                 if (confirm) {
-                  if (confirm.type === "approve") {
-                    await skillService.approve(confirm.id);
-                    toast.success("Skill listing approved and live");
-                  } else {
-                    await skillService.reject(confirm.id);
-                    toast.info("Skill listing rejected");
+                  try {
+                    if (confirm.type === "approve") {
+                      await skillService.approve(confirm.id);
+                      toast.success("Skill listing approved and live");
+                    } else {
+                      await skillService.reject(confirm.id, rejectionReason.trim());
+                      toast.info("Skill listing rejected with feedback");
+                    }
+                    qc.invalidateQueries();
+                    setConfirm(null);
+                  } catch (err: any) {
+                    toast.error(err.message || "Action failed.");
                   }
-                  qc.invalidateQueries();
-                  setConfirm(null);
                 }
               }}
               className={cn(
-                "h-9 px-4 text-xs font-semibold rounded-lg text-white cursor-pointer active:scale-98 transition-all",
+                "h-9 px-4 text-xs font-semibold rounded-lg text-white cursor-pointer active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
                 confirm?.type === "approve" ? "bg-deep-forest hover:bg-deep-forest/90" : "bg-rose-600 hover:bg-rose-700"
               )}
             >
-              Confirm
+              {confirm?.type === "approve" ? "Approve Listing" : "Confirm Rejection"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -155,6 +184,12 @@ function SkillsList({ items, readonly }: { items: import("@/mocks/data").Skill[]
 function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]; readonly?: boolean }) {
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ type: "approve" | "reject"; id: string; title: string } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const handleOpen = (type: "approve" | "reject", id: string, title: string) => {
+    setConfirm({ type, id, title });
+    setRejectionReason("");
+  };
 
   return (
     <div className="space-y-3">
@@ -173,8 +208,8 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
               </div>
               {!readonly && (
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setConfirm({ type: "approve", id: r.id, title: r.name })} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-[32px] px-3.5 cursor-pointer shadow-sm active:scale-98 transition-all">Approve</Button>
-                  <Button size="sm" variant="outline" onClick={() => setConfirm({ type: "reject", id: r.id, title: r.name })} className="text-xs font-semibold h-[32px] px-3.5 border-line-strong hover:bg-panel cursor-pointer active:scale-98 transition-all">Reject</Button>
+                  <Button size="sm" onClick={() => handleOpen("approve", r.id, r.name)} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-[32px] px-3.5 cursor-pointer shadow-sm active:scale-98 transition-all">Approve</Button>
+                  <Button size="sm" variant="outline" onClick={() => handleOpen("reject", r.id, r.name)} className="text-xs font-semibold h-[32px] px-3.5 border-line-strong hover:bg-panel cursor-pointer active:scale-98 transition-all text-rose-600 border-rose-200 hover:bg-rose-50">Reject</Button>
                 </div>
               )}
               {readonly && <Badge variant="secondary" className="pointer-events-none uppercase text-[8.5px] font-bold">Pending Review</Badge>}
@@ -185,7 +220,7 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
       {items.length === 0 && <div className="py-8 text-center text-xs text-on-surface-variant border border-dashed border-line rounded-xl bg-white">Nothing to review.</div>}
 
       <AlertDialog open={!!confirm} onOpenChange={(open) => !open && setConfirm(null)}>
-        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-md p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           <AlertDialogHeader className="space-y-2">
             <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
               {confirm?.type === "approve" ? (
@@ -203,34 +238,55 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
             <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
               {confirm?.type === "approve" 
                 ? `Are you sure you want to approve the resource "${confirm?.title}" to be listed in the marketplace?`
-                : `Are you sure you want to reject the sharing request for "${confirm?.title}"?`
+                : `Please provide a clear reason explaining why "${confirm?.title}" is being declined so the resident can modify and resubmit it.`
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {confirm?.type === "reject" && (
+            <div className="space-y-1.5 pt-2">
+              <label className="text-[11px] font-bold text-ink flex items-center gap-1">
+                <span>Reason for Rejection</span>
+                <span className="text-rose-600 font-extrabold">*</span>
+              </label>
+              <Textarea
+                placeholder="Explain the required changes (e.g., clarify item condition, safety rules, borrowing terms, or adjust credits)..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="text-xs min-h-[90px] rounded-lg border-line-strong/70 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/20 resize-none bg-panel/30"
+              />
+            </div>
+          )}
+
           <AlertDialogFooter className="mt-5 flex gap-2">
             <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction 
+              disabled={confirm?.type === "reject" && !rejectionReason.trim()}
               onClick={async () => {
                 if (confirm) {
-                  if (confirm.type === "approve") {
-                    await resourceService.approve(confirm.id);
-                    toast.success("Resource listing approved and live");
-                  } else {
-                    await resourceService.reject(confirm.id);
-                    toast.info("Resource listing rejected");
+                  try {
+                    if (confirm.type === "approve") {
+                      await resourceService.approve(confirm.id);
+                      toast.success("Resource listing approved and live");
+                    } else {
+                      await resourceService.reject(confirm.id, rejectionReason.trim());
+                      toast.info("Resource listing rejected with feedback");
+                    }
+                    qc.invalidateQueries();
+                    setConfirm(null);
+                  } catch (err: any) {
+                    toast.error(err.message || "Action failed.");
                   }
-                  qc.invalidateQueries();
-                  setConfirm(null);
                 }
               }}
               className={cn(
-                "h-9 px-4 text-xs font-semibold rounded-lg text-white cursor-pointer active:scale-98 transition-all",
+                "h-9 px-4 text-xs font-semibold rounded-lg text-white cursor-pointer active:scale-98 transition-all disabled:opacity-50 disabled:cursor-not-allowed",
                 confirm?.type === "approve" ? "bg-deep-forest hover:bg-deep-forest/90" : "bg-rose-600 hover:bg-rose-700"
               )}
             >
-              Confirm
+              {confirm?.type === "approve" ? "Approve Listing" : "Confirm Rejection"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -238,3 +294,4 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
     </div>
   );
 }
+

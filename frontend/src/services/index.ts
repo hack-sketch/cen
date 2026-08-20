@@ -879,19 +879,56 @@ export const skillService = {
       if (err.message) throw err;
     }
     const s = state.skills.find((x) => x.id === id);
-    if (s) s.status = "approved";
+    if (s) {
+      s.status = "approved";
+      s.rejectionReason = undefined;
+    }
     return delay(true);
   },
-  reject: async (id: string) => {
+  reject: async (id: string, rejectionReason: string) => {
     try {
-      await apiFetch<any>(`/marketplace/skills/${id}/reject`, { method: "POST" });
+      await apiFetch<any>(`/marketplace/skills/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ rejectionReason }),
+      });
       return true;
     } catch (err: any) {
       if (err.message) throw err;
     }
     const s = state.skills.find((x) => x.id === id);
-    if (s) s.status = "rejected";
+    if (s) {
+      s.status = "rejected";
+      s.rejectionReason = rejectionReason;
+    }
     return delay(true);
+  },
+  update: async (id: string, data: Partial<mock.Skill>) => {
+    try {
+      const res = await apiFetch<any>(`/marketplace/skills/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: data.title,
+          category: data.category,
+          credits: data.credits,
+          description: data.description,
+          tags: data.tags,
+        }),
+      });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const s = state.skills.find((x) => x.id === id);
+    if (s) {
+      if (data.title !== undefined) s.title = data.title;
+      if (data.category !== undefined) s.category = data.category;
+      if (data.credits !== undefined) s.credits = data.credits;
+      if (data.description !== undefined) s.description = data.description;
+      if (data.tags !== undefined) s.tags = data.tags;
+      s.status = "pending";
+      s.rejectionReason = undefined;
+    }
+    return delay(s);
   },
   book: async (skillId: string, requesterId: string) => {
     try {
@@ -922,6 +959,7 @@ export const skillService = {
     const s = state.skills.find((x) => x.id === id);
     if (s) {
       s.status = "pending";
+      s.rejectionReason = undefined;
     }
     return delay(s);
   },
@@ -983,20 +1021,57 @@ export const resourceService = {
       if (err.message) throw err;
     }
     const r = state.resources.find((x) => x.id === id);
-    if (r) r.status = "approved";
+    if (r) {
+      r.status = "approved";
+      r.rejectionReason = undefined;
+    }
     return delay(true);
   },
-  reject: async (id: string) => {
+  reject: async (id: string, rejectionReason: string) => {
     try {
-      await apiFetch<any>(`/marketplace/resources/${id}/reject`, { method: "POST" });
+      await apiFetch<any>(`/marketplace/resources/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ rejectionReason }),
+      });
       return true;
     } catch (err: any) {
       if (err.message) throw err;
     }
     const r = state.resources.find((x) => x.id === id);
-    if (r) r.status = "rejected";
+    if (r) {
+      r.status = "rejected";
+      r.rejectionReason = rejectionReason;
+    }
     return delay(true);
   },
+  update: async (id: string, data: Partial<mock.Resource>) => {
+    try {
+      const res = await apiFetch<any>(`/marketplace/resources/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: data.name,
+          category: data.category,
+          credits: data.credits,
+          description: data.description,
+        }),
+      });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const r = state.resources.find((x) => x.id === id);
+    if (r) {
+      if (data.name !== undefined) r.name = data.name;
+      if (data.category !== undefined) r.category = data.category;
+      if (data.credits !== undefined) r.credits = data.credits;
+      if (data.description !== undefined) r.description = data.description;
+      r.status = "pending";
+      r.available = true;
+      r.rejectionReason = undefined;
+    }
+    return delay(r);
+  },
+
   borrow: async (resourceId: string, requesterId: string) => {
     try {
       await apiFetch<any>(`/marketplace/resources/${resourceId}/book`, { method: "POST" });

@@ -3,12 +3,34 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
+class ItemRejectPayload(BaseModel):
+    rejection_reason: str = Field(..., min_length=1, description="Mandatory reason explaining why the listing is being rejected")
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
 class SkillCreate(BaseModel):
     title: str
     category: str
     credits: int = Field(..., gt=0)
     description: str
     tags: Optional[List[str]] = Field(default_factory=list)
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
+class SkillUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    credits: Optional[int] = Field(None, gt=0)
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -25,6 +47,7 @@ class SkillResponse(BaseModel):
     credits: int
     description: str
     status: str
+    rejection_reason: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     society_id: str
 
@@ -56,6 +79,18 @@ class ResourceCreate(BaseModel):
     )
 
 
+class ResourceUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    credits: Optional[int] = Field(None, gt=0)
+    description: Optional[str] = None
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
 class ResourceResponse(BaseModel):
     id: str
     name: str
@@ -65,6 +100,7 @@ class ResourceResponse(BaseModel):
     available: bool
     credits: int
     status: str
+    rejection_reason: Optional[str] = None
     description: str
     society_id: str
 
@@ -73,6 +109,7 @@ class ResourceResponse(BaseModel):
         populate_by_name=True,
         from_attributes=True,
     )
+
 
 
 class ExchangeBookingResponse(BaseModel):

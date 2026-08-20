@@ -37,7 +37,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Sparkles, Plus, Search, Filter, BookOpen, Layers, CheckCircle2, Clock, XCircle, Trash2, RotateCw } from "lucide-react";
+import { Sparkles, Plus, Search, Filter, BookOpen, Layers, CheckCircle2, Clock, XCircle, Trash2, RotateCw, AlertCircle, Edit3 } from "lucide-react";
+
 import { cn, getInitials } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/skills")({ component: Page });
@@ -440,7 +441,11 @@ function Page() {
                             </Badge>
                           )}
 
-                          {(s.status === "deleted" || s.status === "rejected") && (
+                          {s.status === "rejected" && (
+                            <EditSkillDialog skill={s} />
+                          )}
+
+                          {s.status === "deleted" && (
                             <Button
                               size="sm"
                               className="h-8 text-xs font-bold px-3 bg-soft-violet hover:bg-soft-violet/90 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
@@ -478,6 +483,19 @@ function Page() {
                           )}
                         </div>
                       </div>
+
+                      {s.status === "rejected" && (
+                        <div className="p-3 bg-rose-50/80 border border-rose-200 rounded-xl space-y-1 text-xs">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-800 text-[11px]">
+                            <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                            <span>Coordinator Rejection Feedback:</span>
+                          </div>
+                          <p className="text-rose-900/90 italic pl-5 text-[11.5px] leading-relaxed">
+                            "{s.rejectionReason || "Listing requires revisions before it can be approved. Please click Edit & Resubmit to update the details."}"
+                          </p>
+                        </div>
+                      )}
+
 
                       {itemRequests.length > 0 && (
                         <div className="pt-2 border-t border-amber-200/60 bg-amber-50/40 -mx-4 -mb-4 p-3.5 rounded-b-xl space-y-2">
@@ -737,3 +755,198 @@ function NewSkillDialog() {
     </Dialog>
   );
 }
+
+function EditSkillDialog({ skill }: { skill: import("@/mocks/data").Skill }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const form = useForm<SkillFormValues>({
+    resolver: zodResolver(skillFormSchema),
+    defaultValues: {
+      title: skill.title,
+      description: skill.description,
+      category: skill.category,
+      credits: skill.credits,
+      tags: Array.isArray(skill.tags) ? skill.tags.join(", ") : (skill.tags || ""),
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: skill.title,
+        description: skill.description,
+        category: skill.category,
+        credits: skill.credits,
+        tags: Array.isArray(skill.tags) ? skill.tags.join(", ") : (skill.tags || ""),
+      });
+    }
+  }, [open, skill, form]);
+
+  const onSubmit = async (values: SkillFormValues) => {
+    setLoading(true);
+    try {
+      await skillService.update(skill.id, {
+        title: values.title,
+        description: values.description,
+        category: values.category,
+        credits: values.credits,
+        tags: values.tags.split(",").map((t) => t.trim()).filter(Boolean),
+      });
+      setOpen(false);
+      qc.invalidateQueries();
+      toast.success("Listing updated and resubmitted for coordinator review!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update listing.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          className="h-8 text-xs font-bold px-3 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
+        >
+          <Edit3 className="h-3.5 w-3.5" /> Edit & Resubmit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md bg-white border-line/60 rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+            <Edit3 className="h-4 w-4 text-amber-600" />
+            Edit & Resubmit Skill
+          </DialogTitle>
+          <CardDescription className="text-xs text-on-surface-variant">
+            Update your skill details to address coordinator feedback. Resubmitting will shift status back to pending review.
+          </CardDescription>
+        </DialogHeader>
+
+        {skill.rejectionReason && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1 text-xs my-2">
+            <div className="flex items-center gap-1.5 font-bold text-rose-800 text-[11px]">
+              <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+              <span>Feedback to address:</span>
+            </div>
+            <p className="text-rose-900/90 italic pl-5 text-[11.5px]">"{skill.rejectionReason}"</p>
+          </div>
+        )}
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-1">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Skill Title</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. Mathematics Tutoring for Grade 6" 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Detailed Description</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Describe what you can offer, session duration, and prerequisites..." 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60 min-h-[80px]"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-bold text-ink">Category</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="text-xs rounded-lg border-line-strong/60">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {CATS.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage className="text-[10px] text-destructive" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="credits"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-bold text-ink">Credits / Session</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min={1} 
+                        {...field} 
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                        className="text-xs rounded-lg border-line-strong/60"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[10px] text-destructive" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold text-ink">Tags (Comma-separated)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. math, exam, tutoring" 
+                      {...field} 
+                      className="text-xs rounded-lg border-line-strong/60"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] text-destructive" />
+                </FormItem>
+              )}
+            />
+
+            <Button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold h-[38px] rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all"
+            >
+              {loading ? "Saving & Resubmitting..." : "Save Changes & Resubmit for Review"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

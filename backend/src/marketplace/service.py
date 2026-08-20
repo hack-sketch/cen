@@ -1,10 +1,16 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from src.exceptions import APIException, ForbiddenException, NotFoundException
 from src.marketplace.models import Resource, Skill, ExchangeBooking
-from src.marketplace.schemas import ResourceCreate, SkillCreate
+from src.marketplace.schemas import (
+    ItemRejectPayload,
+    ResourceCreate,
+    ResourceUpdate,
+    SkillCreate,
+    SkillUpdate,
+)
 from src.users.models import User
 from src.wallet import service as wallet_service
 from src.wallet.schemas import CreditTransferRequest
@@ -63,12 +69,13 @@ def approve_skill(db: Session, coordinator: User, skill_id: str) -> Skill:
         raise ForbiddenException("Coordinators cannot approve their own skill listings. Another coordinator must review it.")
 
     skill.status = "approved"
+    skill.rejection_reason = None
     db.commit()
     db.refresh(skill)
     return skill
 
 
-def reject_skill(db: Session, coordinator: User, skill_id: str) -> Skill:
+def reject_skill(db: Session, coordinator: User, skill_id: str, payload: ItemRejectPayload) -> Skill:
     skill = db.query(Skill).filter(Skill.id == skill_id).first()
     if not skill:
         raise NotFoundException(f"Skill with ID '{skill_id}' not found")
@@ -76,10 +83,43 @@ def reject_skill(db: Session, coordinator: User, skill_id: str) -> Skill:
     if skill.provider_id == coordinator.id:
         raise ForbiddenException("Coordinators cannot reject their own skill listings. Another coordinator must review it.")
 
+    if not payload or not payload.rejection_reason or not payload.rejection_reason.strip():
+        raise APIException(status_code=400, detail="A rejection reason is required when declining a listing.", code="REJECTION_REASON_REQUIRED")
+
     skill.status = "rejected"
+    skill.rejection_reason = payload.rejection_reason.strip()
     db.commit()
     db.refresh(skill)
     return skill
+
+
+def update_skill(db: Session, user: User, skill_id: str, skill_in: SkillUpdate) -> Skill:
+    skill = db.query(Skill).filter(Skill.id == skill_id).first()
+    if not skill:
+        raise NotFoundException(f"Skill with ID '{skill_id}' not found")
+
+    if skill.provider_id != user.id and user.role not in ["owner", "admin"]:
+        raise ForbiddenException("Only the skill provider or society admin can edit this listing.")
+
+    if skill_in.title is not None:
+        skill.title = skill_in.title.strip()
+    if skill_in.category is not None:
+        skill.category = skill_in.category
+    if skill_in.credits is not None:
+        skill.credits = skill_in.credits
+    if skill_in.description is not None:
+        skill.description = skill_in.description.strip()
+    if skill_in.tags is not None:
+        tags_str = ",".join(skill_in.tags) if isinstance(skill_in.tags, list) else (skill_in.tags or "")
+        skill.tags = tags_str
+
+    # Edit-on-relist workflow: Automatically reset status back to pending and clear rejection remarks
+    skill.status = "pending"
+    skill.rejection_reason = None
+    db.commit()
+    db.refresh(skill)
+    return skill
+
 
 
 def book_skill(db: Session, borrower: User, skill_id: str) -> ExchangeBooking:
@@ -138,12 +178,14 @@ def approve_resource(db: Session, coordinator: User, resource_id: str) -> Resour
         raise ForbiddenException("Coordinators cannot approve their own resource listings. Another coordinator must review it.")
 
     res.status = "approved"
+    res.available = True
+    res.rejection_reason = None
     db.commit()
     db.refresh(res)
     return res
 
 
-def reject_resource(db: Session, coordinator: User, resource_id: str) -> Resource:
+def reject_resource(db: Session, coordinator: User, resource_id: str, payload: ItemRejectPayload) -> Resource:
     res = db.query(Resource).filter(Resource.id == resource_id).first()
     if not res:
         raise NotFoundException(f"Resource with ID '{resource_id}' not found")
@@ -151,10 +193,41 @@ def reject_resource(db: Session, coordinator: User, resource_id: str) -> Resourc
     if res.owner_id == coordinator.id:
         raise ForbiddenException("Coordinators cannot reject their own resource listings. Another coordinator must review it.")
 
+    if not payload or not payload.rejection_reason or not payload.rejection_reason.strip():
+        raise APIException(status_code=400, detail="A rejection reason is required when declining a listing.", code="REJECTION_REASON_REQUIRED")
+
     res.status = "rejected"
+    res.rejection_reason = payload.rejection_reason.strip()
     db.commit()
     db.refresh(res)
     return res
+
+
+def update_resource(db: Session, user: User, resource_id: str, res_in: ResourceUpdate) -> Resource:
+    res = db.query(Resource).filter(Resource.id == resource_id).first()
+    if not res:
+        raise NotFoundException(f"Resource with ID '{resource_id}' not found")
+
+    if res.owner_id != user.id and user.role not in ["owner", "admin"]:
+        raise ForbiddenException("Only the resource owner or society admin can edit this listing.")
+
+    if res_in.name is not None:
+        res.name = res_in.name.strip()
+    if res_in.category is not None:
+        res.category = res_in.category
+    if res_in.credits is not None:
+        res.credits = res_in.credits
+    if res_in.description is not None:
+        res.description = res_in.description.strip()
+
+    # Edit-on-relist workflow: Automatically reset status back to pending and clear rejection remarks
+    res.status = "pending"
+    res.available = True
+    res.rejection_reason = None
+    db.commit()
+    db.refresh(res)
+    return res
+
 
 
 def book_resource(db: Session, borrower: User, resource_id: str) -> ExchangeBooking:
@@ -382,6 +455,7 @@ def relist_resource(db: Session, user: User, resource_id: str) -> Resource:
 
     res.status = "pending"
     res.available = True
+    res.rejection_reason = None
     db.commit()
     db.refresh(res)
     return res
@@ -395,9 +469,11 @@ def relist_skill(db: Session, user: User, skill_id: str) -> Skill:
         raise ForbiddenException("Only the skill owner or society admin can relist this skill.")
 
     skill.status = "pending"
+    skill.rejection_reason = None
     db.commit()
     db.refresh(skill)
     return skill
+
 
 
 def return_resource(db: Session, user: User, resource_id: str) -> Resource:
