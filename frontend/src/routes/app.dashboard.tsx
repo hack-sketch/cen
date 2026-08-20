@@ -16,7 +16,9 @@ import {
   creditService,
   householdService,
   joinRequestService,
+  analyticsService,
 } from "@/services";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Building2, Users, ClipboardList, Wallet, CheckSquare, AlertCircle,
@@ -132,16 +134,20 @@ function Dashboard() {
 function OwnerDash() {
   const societies = useQuery({ queryKey: ["societies"], queryFn: () => societyService.list() });
   const apps = useQuery({ queryKey: ["apps"], queryFn: () => societyService.listApplications() });
+  const analytics = useQuery({ queryKey: ["owner-analytics"], queryFn: () => analyticsService.getOwnerAnalytics() });
+
   const pending = apps.data?.filter((a) => a.status === "pending").length ?? 0;
-  const total = societies.data?.length ?? 0;
+  const total = societies.data?.length ?? (analytics.data?.totalSocieties ?? 0);
+  const totalRes = analytics.data?.totalResidents ?? 0;
   
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Stat icon={Building2} label="Active Societies" value={total} trend={{ value: "+2 new", type: "up" }} />
-        <Stat icon={Users} label="Total Residents" value="3,240" hint="Across all societies" trend={{ value: "+12.5%", type: "up" }} />
+        <Stat icon={Users} label="Total Members" value={totalRes} hint="Across all societies" trend={{ value: "Live roster", type: "up" }} />
         <Stat icon={ClipboardList} label="Pending Applications" value={pending} hint="Requires your response" trend={{ value: pending > 0 ? "Action required" : "Clear", type: pending > 0 ? "down" : "neutral" }} />
       </div>
+
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Recent Applications card */}

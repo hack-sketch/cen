@@ -557,6 +557,15 @@ export const joinRequestService = {
 
 // ---------------- Users / Residents ----------------
 export const userService = {
+  listAll: async () => {
+    try {
+      const res = await apiFetch<any[]>("/users");
+      if (Array.isArray(res)) return res;
+    } catch (err) {
+      console.warn("[API Notice] listAll users fallback:", err);
+    }
+    return delay(state.users);
+  },
   listBySociety: async (societyId: string) => {
     try {
       const res = await apiFetch<any[]>(`/users?society_id=${societyId}`);
@@ -566,6 +575,7 @@ export const userService = {
     }
     return delay(state.users.filter((u) => u.societyId === societyId && u.role !== "admin"));
   },
+
   listCoordinators: async (societyId: string) => {
     try {
       const res = await apiFetch<any[]>(`/users/coordinators?society_id=${societyId}`);
@@ -1682,8 +1692,59 @@ export const analyticsService = {
       totalResources: 6,
       totalEvents: 3,
       totalComplaints: 3,
+      users: state.users.map((u) => {
+        const soc = state.societies.find((s) => s.id === u.societyId);
+        const hh = state.households.find((h) => h.id === u.householdId);
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          societyId: u.societyId,
+          societyName: soc ? soc.name : "Unassigned",
+          householdId: u.householdId,
+          householdUnit: hh ? hh.unitNumber : "Unassigned",
+          creditBalance: u.creditBalance,
+          joinedDate: u.joinedDate,
+          isActive: u.isActive !== false,
+          isCoordinator: !!u.isCoordinator,
+          idProofUploaded: !!u.idProofUploaded,
+          idProofVerified: !!u.idProofVerified,
+        };
+      }),
     });
   },
+  getOwnerUserDirectory: async () => {
+    try {
+      const res = await apiFetch<any[]>("/analytics/owner/users");
+      if (Array.isArray(res)) return res;
+    } catch (err) {
+      console.warn("[API Notice] getOwnerUserDirectory fallback:", err);
+    }
+    return delay(
+      state.users.map((u) => {
+        const soc = state.societies.find((s) => s.id === u.societyId);
+        const hh = state.households.find((h) => h.id === u.householdId);
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          societyId: u.societyId,
+          societyName: soc ? soc.name : "Unassigned",
+          householdId: u.householdId,
+          householdUnit: hh ? hh.unitNumber : "Unassigned",
+          creditBalance: u.creditBalance,
+          joinedDate: u.joinedDate,
+          isActive: u.isActive !== false,
+          isCoordinator: !!u.isCoordinator,
+          idProofUploaded: !!u.idProofUploaded,
+          idProofVerified: !!u.idProofVerified,
+        };
+      })
+    );
+  },
 };
+
 
 export { state as __mockState };

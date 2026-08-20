@@ -74,11 +74,14 @@ def leave_society(
 
 @router.get("", response_model=List[UserResponse])
 def list_society_users(
-    society_id: str,
+    society_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token),
 ):
-    return user_service.list_users_by_society(db, society_id)
+    if society_id:
+        return user_service.list_users_by_society(db, society_id)
+    return user_service.list_all_users(db)
+
 
 
 @router.get("/{user_id}", response_model=UserResponse)

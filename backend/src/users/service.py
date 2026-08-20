@@ -85,6 +85,11 @@ def list_users_by_society(db: Session, society_id: str) -> List[User]:
     return db.query(User).filter(User.society_id == society_id).all()
 
 
+def list_all_users(db: Session) -> List[User]:
+    return db.query(User).order_by(User.joined_date.desc()).all()
+
+
+
 def upload_id_proof(db: Session, user_id: str, id_proof_url: str) -> User:
     if id_proof_url and len(id_proof_url) > 1_500_000:
         raise BadRequestException("ID proof document size must be less than 1 MB.")

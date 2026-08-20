@@ -1,20 +1,54 @@
+from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from src.analytics.schemas import OwnerAnalyticsResponse, SocietyPerformanceResponse
+from src.analytics.schemas import (
+    OwnerAnalyticsResponse,
+    OwnerUserDirectoryItem,
+    SocietyPerformanceResponse,
+)
 from src.complaints.models import Complaint
 from src.events.models import EventItem
 from src.marketplace.models import Resource, Skill
-from src.societies.models import Society, SocietyApplication
+from src.societies.models import Household, Society, SocietyApplication
 from src.users.models import User
 from src.wallet.models import Transaction
+
+
+def get_owner_user_directory(db: Session) -> List[OwnerUserDirectoryItem]:
+    users = db.query(User).order_by(User.joined_date.desc()).all()
+    societies = {s.id: s.name for s in db.query(Society).all()}
+    households = {h.id: h.unit_number for h in db.query(Household).all()}
+
+    result = []
+    for u in users:
+        result.append(
+            OwnerUserDirectoryItem(
+                id=u.id,
+                name=u.name,
+                email=u.email,
+                role=u.role,
+                society_id=u.society_id,
+                society_name=societies.get(u.society_id) if u.society_id else "Unassigned",
+                household_id=u.household_id,
+                household_unit=households.get(u.household_id) if u.household_id else "Unassigned",
+                credit_balance=u.credit_balance or 0,
+                joined_date=u.joined_date,
+                is_active=u.is_active if u.is_active is not None else True,
+                is_coordinator=bool(u.is_coordinator),
+                id_proof_uploaded=bool(u.id_proof_uploaded),
+                id_proof_verified=bool(u.id_proof_verified),
+                id_proof_url=u.id_proof_url,
+            )
+        )
+    return result
 
 
 def get_owner_analytics(db: Session) -> OwnerAnalyticsResponse:
     total_soc = db.query(Society).count()
     active_soc = db.query(Society).filter(Society.status == "active").count()
     pending_apps = db.query(SocietyApplication).filter(SocietyApplication.status == "pending").count()
-    total_res = db.query(User).filter(User.role == "resident").count()
+    total_res = db.query(User).count()
     total_tx = db.query(Transaction).count()
     circulating = db.query(func.sum(User.credit_balance)).scalar() or 0
 
@@ -22,6 +56,8 @@ def get_owner_analytics(db: Session) -> OwnerAnalyticsResponse:
     resources = db.query(Resource).count()
     events = db.query(EventItem).count()
     complaints = db.query(Complaint).count()
+
+    user_directory = get_owner_user_directory(db)
 
     return OwnerAnalyticsResponse(
         total_societies=total_soc,
@@ -34,7 +70,9 @@ def get_owner_analytics(db: Session) -> OwnerAnalyticsResponse:
         total_resources=resources,
         total_events=events,
         total_complaints=complaints,
+        users=user_directory,
     )
+
 
 
 def get_society_performance(db: Session, society_id: str) -> SocietyPerformanceResponse:
