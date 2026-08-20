@@ -172,23 +172,45 @@ function CoordDisputeCard({ d, onChange }: { d: any; onChange: () => void }) {
         {/* Section 2: Resident Statements */}
         <div className="space-y-2">
           <span className="text-[11px] uppercase font-bold tracking-wider text-on-surface-variant flex items-center gap-1.5">
-            <MessageSquare className="h-3.5 w-3.5 text-deep-forest" /> Resident Statements & Claims
+            <MessageSquare className="h-3.5 w-3.5 text-deep-forest" /> Involved Participant Statements & Claims
           </span>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 text-xs">
-            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1">
-              <span className="font-bold text-slate-900 uppercase text-[10px] block">Buyer ({d.buyerName}) Statement</span>
+            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 uppercase text-[10px] block">
+                  Buyer ({d.buyerName})
+                </span>
+                <Badge variant="outline" className={cn(
+                  "text-[9px] px-1.5 py-0.5",
+                  d.buyerId === d.filedByUserId ? "bg-amber-50 text-amber-800 border-amber-200 font-semibold" : "bg-indigo-50 text-indigo-800 border-indigo-200 font-semibold"
+                )}>
+                  {d.buyerId === d.filedByUserId ? "Primary Filer" : "Secondary Party"}
+                </Badge>
+              </div>
               <p className="text-slate-700 italic leading-normal">
-                {d.buyerNote ? `"${d.buyerNote}"` : "No note added by buyer yet."}
+                {d.buyerNote ? `"${d.buyerNote}"` : "No note or defense added by buyer yet."}
               </p>
             </div>
-            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1">
-              <span className="font-bold text-slate-900 uppercase text-[10px] block">Seller ({d.ownerName}) Statement</span>
+
+            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 uppercase text-[10px] block">
+                  Seller ({d.ownerName})
+                </span>
+                <Badge variant="outline" className={cn(
+                  "text-[9px] px-1.5 py-0.5",
+                  d.ownerId === d.filedByUserId ? "bg-amber-50 text-amber-800 border-amber-200 font-semibold" : "bg-indigo-50 text-indigo-800 border-indigo-200 font-semibold"
+                )}>
+                  {d.ownerId === d.filedByUserId ? "Primary Filer" : "Secondary Party"}
+                </Badge>
+              </div>
               <p className="text-slate-700 italic leading-normal">
-                {d.ownerNote ? `"${d.ownerNote}"` : "No note added by seller yet."}
+                {d.ownerNote ? `"${d.ownerNote}"` : "No note or defense added by seller yet."}
               </p>
             </div>
           </div>
         </div>
+
 
         {/* Section 3: Coordinator Saved Note (Visible to all 3) */}
         {d.coordinatorNote && (

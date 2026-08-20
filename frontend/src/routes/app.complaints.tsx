@@ -13,7 +13,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { complaintService, disputeService, creditService, userService } from "@/services";
 import { categorizeComplaint } from "@/services/ai";
 import { useAuth } from "@/lib/auth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
 import { toast } from "sonner";
 import { Plus, ShieldAlert, EyeOff, MessageSquare, CheckCircle2, Scale, Trash2, Edit3, AlertCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -144,22 +145,56 @@ function ComplaintCard({ c, sid }: { c: any; sid: string }) {
 
 function TradeDisputeCard({ d, onChange }: { d: any; onChange: () => void }) {
   const { user } = useAuth();
-  const isBuyer = user!.id === d.buyerId;
-  const isOwner = user!.id === d.ownerId;
-  const [editing, setEditing] = useState(false);
-  const myCurrentNote = isBuyer ? d.buyerNote : isOwner ? d.ownerNote : "";
+
+  // Robust matching for Buyer, Seller, Filer and Counterparty
+  const currentUserId = user?.id || "";
+  const currentUserName = (user?.name || "").toLowerCase();
+
+  const buyerId = d.buyerId || d.buyer_id || "";
+  const ownerId = d.ownerId || d.owner_id || "";
+  const buyerName = (d.buyerName || d.buyer_name || "").toLowerCase();
+  const ownerName = (d.ownerName || d.owner_name || "").toLowerCase();
+  const filedByUserId = d.filedByUserId || d.filed_by_user_id || "";
+  const filedByName = (d.filedByName || d.filed_by_user_name || "").toLowerCase();
+
+  const isBuyer = (buyerId && buyerId === currentUserId) || (buyerName && buyerName === currentUserName);
+  const isOwner = (ownerId && ownerId === currentUserId) || (ownerName && ownerName === currentUserName);
+  const isFiler = (filedByUserId && filedByUserId === currentUserId) || (filedByName && filedByName === currentUserName);
+  const isCoordinator = user?.isCoordinator || ["admin", "coordinator", "owner"].includes(user?.role || "");
+
+  // If user is not the dispute filer and not a coordinator, they are the counterparty resident
+  const isCounterparty = !isFiler && !isCoordinator;
+
+  // Determine current note
+  const myCurrentNote = isBuyer
+    ? (d.buyerNote || d.buyer_note || "")
+    : isOwner
+    ? (d.ownerNote || d.owner_note || "")
+    : isCoordinator
+    ? (d.coordinatorNote || d.coordinator_note || "")
+    : (filedByUserId === buyerId ? (d.ownerNote || d.owner_note || "") : (d.buyerNote || d.buyer_note || ""));
+
   const [note, setNote] = useState(myCurrentNote || "");
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    setNote(myCurrentNote || "");
+  }, [myCurrentNote, d.buyerNote, d.ownerNote, d.coordinatorNote]);
+
   const handleSaveNote = async () => {
+    if (!note.trim()) {
+      toast.error("Please enter your justification statement text.");
+      return;
+    }
     setLoading(true);
     try {
       await disputeService.updateNote(d.id, note.trim());
-      toast.success("Statement note updated successfully!");
+      toast.success("Justification statement recorded successfully!");
       setEditing(false);
       onChange();
-    } catch {
-      toast.error("Failed to update statement note.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save statement note.");
     } finally {
       setLoading(false);
     }
@@ -233,13 +268,38 @@ function TradeDisputeCard({ d, onChange }: { d: any; onChange: () => void }) {
             <MessageSquare className="h-3.5 w-3.5 text-deep-forest" /> Participant Statements & Claims
           </span>
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 text-xs">
-            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1">
-              <span className="font-bold text-slate-900 uppercase text-[10px] block">Buyer ({d.buyerName}) Statement</span>
-              <p className="text-slate-700 italic leading-normal">{d.buyerNote ? `"${d.buyerNote}"` : "No note added by buyer yet."}</p>
+            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 uppercase text-[10px] block">
+                  Buyer ({d.buyerName}) Statement
+                </span>
+                <Badge variant="outline" className={cn(
+                  "text-[9px] px-1.5 py-0.5",
+                  d.buyerId === d.filedByUserId ? "bg-amber-50 text-amber-800 border-amber-200 font-semibold" : "bg-indigo-50 text-indigo-800 border-indigo-200 font-semibold"
+                )}>
+                  {d.buyerId === d.filedByUserId ? "Primary Filer" : "Counterparty"}
+                </Badge>
+              </div>
+              <p className="text-slate-700 italic leading-normal">
+                {d.buyerNote ? `"${d.buyerNote}"` : "No note added by buyer yet."}
+              </p>
             </div>
-            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1">
-              <span className="font-bold text-slate-900 uppercase text-[10px] block">Seller ({d.ownerName}) Statement</span>
-              <p className="text-slate-700 italic leading-normal">{d.ownerNote ? `"${d.ownerNote}"` : "No note added by seller yet."}</p>
+
+            <div className="p-3.5 rounded-xl border bg-slate-50/80 border-slate-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 uppercase text-[10px] block">
+                  Seller ({d.ownerName}) Statement
+                </span>
+                <Badge variant="outline" className={cn(
+                  "text-[9px] px-1.5 py-0.5",
+                  d.ownerId === d.filedByUserId ? "bg-amber-50 text-amber-800 border-amber-200 font-semibold" : "bg-indigo-50 text-indigo-800 border-indigo-200 font-semibold"
+                )}>
+                  {d.ownerId === d.filedByUserId ? "Primary Filer" : "Counterparty"}
+                </Badge>
+              </div>
+              <p className="text-slate-700 italic leading-normal">
+                {d.ownerNote ? `"${d.ownerNote}"` : "No note added by seller yet."}
+              </p>
             </div>
           </div>
         </div>
@@ -264,46 +324,97 @@ function TradeDisputeCard({ d, onChange }: { d: any; onChange: () => void }) {
           </div>
         )}
 
-        {/* Section 5: My Statement Editor */}
-        {(isBuyer || isOwner) && (
-          <div className="pt-3 space-y-2 border-t border-line/20">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+        {/* Section 5: Unlocked Counterparty / Participant Justification Form */}
+        <div className="pt-3 space-y-3 border-t border-line/20">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-ink flex items-center gap-1.5">
-                <Edit3 className="h-3.5 w-3.5 text-deep-forest" /> Your Statement Note ({isBuyer ? "Buyer" : "Seller"})
+                <Edit3 className="h-3.5 w-3.5 text-deep-forest" />
+                {isFiler
+                  ? `Your Dispute Initiator Statement (${isBuyer ? "Buyer" : isOwner ? "Seller" : "Filer"})`
+                  : isCoordinator
+                  ? "Coordinator Mediation Note"
+                  : `Counterparty Defense & Evidence Justification (${isBuyer ? "Buyer" : isOwner ? "Seller" : "Counterparty"})`}
               </span>
-              {!editing && (
-                <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 text-xs font-semibold text-deep-forest hover:bg-panel cursor-pointer self-start sm:self-auto">
-                  {myCurrentNote ? "Edit My Note" : "+ Add Statement Note"}
-                </Button>
+              {isCounterparty && (
+                <Badge variant="outline" className="bg-indigo-50 border-indigo-200 text-indigo-800 text-[10px] font-bold uppercase tracking-wider">
+                  Counterparty Resident (Active Participant)
+                </Badge>
+              )}
+              {isFiler && (
+                <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                  Dispute Initiator
+                </Badge>
               )}
             </div>
-            {editing ? (
-              <div className="space-y-2.5 pt-1">
-                <Textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Explain your side of the trade dispute for coordinators..."
-                  rows={3}
-                  className="border-line-strong text-xs rounded-xl p-3 focus:ring-1 focus:ring-deep-forest/20"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setEditing(false)} className="h-8 text-xs rounded-lg">Cancel</Button>
-                  <Button size="sm" disabled={loading} onClick={handleSaveNote} className="h-8 text-xs bg-deep-forest text-white rounded-lg px-4 font-semibold shadow-xs">
-                    {loading ? "Saving..." : "Save Statement Note"}
+            {!editing && myCurrentNote && (
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-7 text-xs font-semibold text-deep-forest hover:bg-panel cursor-pointer self-start sm:self-auto">
+                Edit My Justification
+              </Button>
+            )}
+          </div>
+
+          {editing || !myCurrentNote ? (
+            <div className="space-y-2.5 pt-1">
+              <p className="text-[11px] text-on-surface-variant leading-relaxed font-medium">
+                {isCounterparty
+                  ? "As the counterparty resident in this trade, submit your perspective, defense statement, or evidence for the community coordinators to review before reaching a resolution verdict."
+                  : "Update your statement notes or provide additional evidence for the coordinators."}
+              </p>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={
+                  isCounterparty
+                    ? "Explain your side of the dispute, delivery status, return condition, or counter-justification..."
+                    : "Explain the issue, agreement details, or supporting evidence for coordinators..."
+                }
+                rows={3}
+                className="border-line-strong text-xs rounded-xl p-3 focus:ring-1 focus:ring-deep-forest/20 bg-white"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-on-surface-variant italic">
+                  Visible to both residents and society coordinators.
+                </span>
+                <div className="flex gap-2">
+                  {myCurrentNote && (
+                    <Button size="sm" variant="outline" onClick={() => setEditing(false)} className="h-8 text-xs rounded-lg cursor-pointer">
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={loading || !note.trim()}
+                    onClick={handleSaveNote}
+                    className="h-8 text-xs bg-deep-forest hover:bg-deep-forest/90 text-white rounded-lg px-4 font-semibold shadow-xs cursor-pointer active:scale-98"
+                  >
+                    {loading ? "Saving..." : myCurrentNote ? "Update Justification" : "Submit Counter-Justification"}
                   </Button>
                 </div>
               </div>
-            ) : (
-              <p className="text-xs text-on-surface-variant italic pl-3 py-1.5 border-l-2 border-deep-forest/40 bg-panel/20 rounded-r-lg">
-                {myCurrentNote ? `"${myCurrentNote}"` : "You haven't written your statement note yet. Click 'Add Statement Note' to add one."}
+            </div>
+          ) : (
+            <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider block">
+                  Your Recorded Statement & Evidence
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-6 text-[10px] text-indigo-800 font-semibold px-2 hover:bg-indigo-100 cursor-pointer">
+                  <Edit3 className="h-3 w-3 mr-1" /> Edit
+                </Button>
+              </div>
+              <p className="text-xs text-indigo-950 italic leading-relaxed">
+                "{myCurrentNote}"
               </p>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
 }
+
+
 
 function NewComplaintDialog() {
   const { user } = useAuth();
@@ -430,13 +541,29 @@ function FileTradeDisputeDialog() {
     if (!selectedTrade || !reason.trim()) return;
     setLoading(true);
     try {
+      let counterpartyId = "u-counterparty";
+      if (user?.societyId) {
+        try {
+          const societyUsers = await userService.listBySociety(user.societyId);
+          const matched = societyUsers.find(
+            (u: any) => u.name.toLowerCase() === selectedTrade.otherPersonName.toLowerCase()
+          );
+          if (matched) {
+            counterpartyId = matched.id;
+          }
+        } catch (e) {
+          console.warn("Could not lookup counterparty user ID:", e);
+        }
+      }
+
+
       await disputeService.file({
         bookingId: selectedTrade.id,
         itemTitle: selectedTrade.description,
         itemType: selectedTrade.isSpent ? "Spent Trade" : "Earned Trade",
-        buyerId: selectedTrade.isSpent ? user!.id : "u-counterparty",
+        buyerId: selectedTrade.isSpent ? user!.id : counterpartyId,
         buyerName: selectedTrade.isSpent ? user!.name : selectedTrade.otherPersonName,
-        ownerId: !selectedTrade.isSpent ? user!.id : "u-counterparty",
+        ownerId: !selectedTrade.isSpent ? user!.id : counterpartyId,
         ownerName: !selectedTrade.isSpent ? user!.name : selectedTrade.otherPersonName,
         reason: reason.trim(),
       });
@@ -451,6 +578,7 @@ function FileTradeDisputeDialog() {
       setLoading(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

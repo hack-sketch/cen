@@ -30,6 +30,7 @@ def file_dispute(
 
 
 @router.put("/{dispute_id}/note", response_model=DisputeResponse)
+@router.post("/{dispute_id}/note", response_model=DisputeResponse)
 def update_dispute_note(
     dispute_id: str,
     payload: DisputeNotePayload,
@@ -37,6 +38,7 @@ def update_dispute_note(
     current_user: User = Depends(get_current_user_from_token),
 ):
     return dispute_service.update_dispute_note(db, current_user, dispute_id, payload)
+
 
 
 @router.put("/{dispute_id}/status", response_model=DisputeResponse)
