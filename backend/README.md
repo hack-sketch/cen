@@ -39,11 +39,11 @@ source venv/bin/activate
 ### Step 3: Install Dependencies
 
 ```bash
-pip install -r pyproject.toml
+pip install -r requirements.txt
 ```
-*Alternatively, install using standard setuptools:*
+*Alternatively, install via pyproject.toml:*
 ```bash
-pip install fastapi "uvicorn[standard]" sqlalchemy pydantic pydantic-settings pyjwt passlib python-multipart httpx python-dotenv pytest pytest-asyncio
+pip install -r pyproject.toml
 ```
 
 ---
