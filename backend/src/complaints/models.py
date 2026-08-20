@@ -19,6 +19,7 @@ class Complaint(Base):
     filed_by_user_name = Column(String, nullable=False)
     target_coordinator_id = Column(String, nullable=True, index=True)
     is_private = Column(Boolean, nullable=False, default=False)
+    is_anonymous = Column(Boolean, nullable=False, default=False)
     status = Column(String, nullable=False, default="open")  # open | under_review | resolved
     resolution_notes = Column(String, nullable=True)
     society_id = Column(String, nullable=False, index=True)

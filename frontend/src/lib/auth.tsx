@@ -13,6 +13,7 @@ interface AuthCtx {
   login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
   setUserById: (id: string) => Promise<void>;
+  refetchUser: () => Promise<void>;
   // Coordinator view toggle: "coordinator" or "resident"
   viewMode: "coordinator" | "resident";
   setViewMode: (m: "coordinator" | "resident") => void;
@@ -27,6 +28,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewModeState] = useState<"coordinator" | "resident">("coordinator");
 
+  const refetchUser = async () => {
+    const id = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    if (id) {
+      try {
+        const u = await authService.getUserById(id);
+        if (u) setUser(u);
+      } catch (e) {
+        console.warn("[Auth] Failed to refetch user permissions", e);
+      }
+    }
+  };
+
   useEffect(() => {
     const id = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     const vm = typeof window !== "undefined" ? localStorage.getItem(VIEW_KEY) : null;
@@ -40,6 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
+
+  // Sync user profile on window focus or visibility change to ensure instant permission updates
+  useEffect(() => {
+    const onFocus = () => {
+      if (user?.id) refetchUser();
+    };
+    window.addEventListener("focus", onFocus);
+    const interval = setInterval(() => {
+      if (user?.id) refetchUser();
+    }, 5000); // 5s silent refresh
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      clearInterval(interval);
+    };
+  }, [user?.id]);
 
   const login: AuthCtx["login"] = async (email, password) => {
     const u = await authService.login(email, password);
@@ -76,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user?.isCoordinator && viewMode === "resident" ? "resident" : (user?.role ?? "resident");
 
   return (
-    <Ctx.Provider value={{ user, loading, login, logout, setUserById, viewMode, setViewMode, effectiveRole }}>
+    <Ctx.Provider value={{ user, loading, login, logout, setUserById, refetchUser, viewMode, setViewMode, effectiveRole }}>
       {children}
     </Ctx.Provider>
   );

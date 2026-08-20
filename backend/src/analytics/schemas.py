@@ -9,6 +9,10 @@ class OwnerAnalyticsResponse(BaseModel):
     total_residents: int
     total_transactions: int
     total_credits_circulating: int
+    total_skills: int = 0
+    total_resources: int = 0
+    total_events: int = 0
+    total_complaints: int = 0
 
     model_config = ConfigDict(
         alias_generator=to_camel,

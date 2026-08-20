@@ -6,6 +6,7 @@ from src.database import get_db
 from src.dependencies import get_current_user_from_token, require_roles
 from src.marketplace import service as mp_service
 from src.marketplace.schemas import (
+    ExchangeBookingResponse,
     ResourceCreate,
     ResourceResponse,
     SkillCreate,
@@ -23,7 +24,7 @@ def list_skills(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token),
 ):
-    return mp_service.list_approved_skills(db, society_id)
+    return mp_service.list_skills(db, society_id, current_user)
 
 
 @router.get("/skills/pending", response_model=List[SkillResponse])
@@ -62,7 +63,7 @@ def reject_skill(
     return mp_service.reject_skill(db, current_user, skill_id)
 
 
-@router.post("/skills/{skill_id}/book", response_model=SkillResponse)
+@router.post("/skills/{skill_id}/book", response_model=ExchangeBookingResponse)
 def book_skill(
     skill_id: str,
     db: Session = Depends(get_db),
@@ -78,7 +79,7 @@ def list_resources(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token),
 ):
-    return mp_service.list_approved_resources(db, society_id)
+    return mp_service.list_resources(db, society_id, current_user)
 
 
 @router.get("/resources/pending", response_model=List[ResourceResponse])
@@ -117,7 +118,7 @@ def reject_resource(
     return mp_service.reject_resource(db, current_user, resource_id)
 
 
-@router.post("/resources/{resource_id}/book", response_model=ResourceResponse)
+@router.post("/resources/{resource_id}/book", response_model=ExchangeBookingResponse)
 def book_resource(
     resource_id: str,
     db: Session = Depends(get_db),
@@ -134,3 +135,87 @@ def toggle_resource_availability(
     current_user: User = Depends(get_current_user_from_token),
 ):
     return mp_service.toggle_resource_availability(db, current_user, resource_id, available)
+
+
+@router.post("/resources/{resource_id}/relist", response_model=ResourceResponse)
+def relist_resource(
+    resource_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.relist_resource(db, current_user, resource_id)
+
+
+@router.post("/resources/{resource_id}/return", response_model=ResourceResponse)
+def return_resource(
+    resource_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.return_resource(db, current_user, resource_id)
+
+
+@router.post("/skills/{skill_id}/relist", response_model=SkillResponse)
+def relist_skill(
+    skill_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.relist_skill(db, current_user, skill_id)
+
+
+
+@router.delete("/skills/{skill_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_skill(
+    skill_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    mp_service.delete_skill(db, current_user, skill_id)
+    return None
+
+
+@router.delete("/resources/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_resource(
+    resource_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    mp_service.delete_resource(db, current_user, resource_id)
+    return None
+
+
+# Exchange Bookings Approval Flow
+@router.get("/bookings", response_model=List[ExchangeBookingResponse])
+def list_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.list_bookings_for_user(db, current_user.id)
+
+
+@router.post("/bookings/{booking_id}/approve", response_model=ExchangeBookingResponse)
+def approve_booking(
+    booking_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.approve_booking_request(db, current_user, booking_id)
+
+
+@router.post("/bookings/{booking_id}/decline", response_model=ExchangeBookingResponse)
+def decline_booking(
+    booking_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.decline_booking_request(db, current_user, booking_id)
+
+
+@router.post("/bookings/{booking_id}/cancel", response_model=ExchangeBookingResponse)
+def cancel_booking(
+    booking_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return mp_service.cancel_booking_request(db, current_user, booking_id)

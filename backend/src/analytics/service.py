@@ -18,6 +18,11 @@ def get_owner_analytics(db: Session) -> OwnerAnalyticsResponse:
     total_tx = db.query(Transaction).count()
     circulating = db.query(func.sum(User.credit_balance)).scalar() or 0
 
+    skills = db.query(Skill).count()
+    resources = db.query(Resource).count()
+    events = db.query(EventItem).count()
+    complaints = db.query(Complaint).count()
+
     return OwnerAnalyticsResponse(
         total_societies=total_soc,
         active_societies=active_soc,
@@ -25,6 +30,10 @@ def get_owner_analytics(db: Session) -> OwnerAnalyticsResponse:
         total_residents=total_res,
         total_transactions=total_tx,
         total_credits_circulating=int(circulating),
+        total_skills=skills,
+        total_resources=resources,
+        total_events=events,
+        total_complaints=complaints,
     )
 
 
@@ -42,12 +51,26 @@ def get_society_performance(db: Session, society_id: str) -> SocietyPerformanceR
     resolved_comp = db.query(Complaint).filter(Complaint.society_id == society_id, Complaint.status == "resolved").count()
 
     pct = (resolved_comp / total_comp * 100.0) if total_comp > 0 else 100.0
-    score = soc.performance_score if soc and soc.performance_score else 95
+
+    # Calculate real dynamic performance score (0 - 100)
+    score = 45
+    if coords >= 2:
+        score += 25  # Operational requirement bonus
+    else:
+        score += coords * 10
+
+    score += min(15, (skills + resources) * 2)   # Marketplace listings bonus
+    score += min(15, int(pct * 0.15))            # Complaint resolution efficiency
+
+    dynamic_score = max(0, min(100, score))
+    if soc:
+        soc.performance_score = dynamic_score
+        db.commit()
 
     return SocietyPerformanceResponse(
         society_id=society_id,
         society_name=soc_name,
-        performance_score=score,
+        performance_score=dynamic_score,
         coordinator_count=coords,
         total_residents=residents,
         active_skills=skills,

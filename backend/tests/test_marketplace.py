@@ -137,6 +137,17 @@ def test_book_skill_and_credit_direction(client, db_session):
 
     book_resp = client.post(f"/api/v1/marketplace/skills/{sk.id}/book", headers=headers)
     assert book_resp.status_code == 200
+    booking_id = book_resp.json()["id"]
+    assert book_resp.json()["status"] == "pending_owner_approval"
+
+    # Provider logs in and approves booking
+    prov_login = client.post("/api/v1/auth/login", json={"email": "provider@cen.app", "password": "password123"})
+    prov_token = prov_login.json().get("accessToken") or prov_login.json().get("access_token")
+    prov_headers = {"Authorization": f"Bearer {prov_token}"}
+    
+    appr_resp = client.post(f"/api/v1/marketplace/bookings/{booking_id}/approve", headers=prov_headers)
+    assert appr_resp.status_code == 200
+    assert appr_resp.json()["status"] == "approved"
 
     # Verify Credit Direction: Booker debited (-12 -> 38), Provider credited (+12 -> 22)
     db_session.refresh(booker)

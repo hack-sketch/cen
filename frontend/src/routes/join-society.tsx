@@ -6,13 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { findNearbySocieties, type NearbyResult } from "@/services/ai";
-import { societyService, householdService, joinRequestService } from "@/services";
+import { societyService, householdService, joinRequestService, userService } from "@/services";
 import { useAuth } from "@/lib/auth";
 import { OnboardingSurveyModal } from "@/routes/app";
 import type { Household, Society } from "@/mocks/data";
 import { toast } from "sonner";
-import { MapPin, Sparkles, CheckCircle2, Upload, Lock } from "lucide-react";
+import { CheckCircle2, Upload, Lock, Search } from "lucide-react";
 
 export const Route = createFileRoute("/join-society")({
   head: () => ({ meta: [{ title: "Join a society — CEN" }] }),
@@ -99,15 +98,15 @@ function JoinSociety() {
     <div className="mx-auto max-w-3xl p-4 py-10">
       <Link to="/" className="text-sm text-muted-foreground hover:underline">← Back</Link>
       <h1 className="mt-4 text-3xl font-bold">Join a society</h1>
-      <p className="text-muted-foreground">Find your society by address or enter your invite key.</p>
+      <p className="text-muted-foreground">Search for your society by name or enter your invite key.</p>
 
-      <Tabs defaultValue="address" className="mt-6">
+      <Tabs defaultValue="name" className="mt-6">
         <TabsList>
-          <TabsTrigger value="address"><MapPin className="mr-2 h-4 w-4" />Find by address</TabsTrigger>
+          <TabsTrigger value="name"><Search className="mr-2 h-4 w-4" />Search by name</TabsTrigger>
           <TabsTrigger value="key">Join by key</TabsTrigger>
         </TabsList>
-        <TabsContent value="address">
-          <FindByAddress onPick={(s) => { setSelectedSociety(s); setStep(1); }} />
+        <TabsContent value="name">
+          <FindByName onPick={(s) => { setSelectedSociety(s); setStep(1); }} />
         </TabsContent>
         <TabsContent value="key">
           <JoinByKey onPick={(s) => { setSelectedSociety(s); setStep(1); }} />
@@ -117,43 +116,99 @@ function JoinSociety() {
   );
 }
 
-function FindByAddress({ onPick }: { onPick: (s: Society) => void }) {
-  const [addr, setAddr] = useState("");
-  const [results, setResults] = useState<NearbyResult[]>([]);
-  const [loading, setLoading] = useState(false);
+function FindByName({ onPick }: { onPick: (s: Society) => void }) {
+  const [query, setQuery] = useState("");
+  const [societies, setSocieties] = useState<Society[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const search = async () => {
-    setLoading(true);
-    // TODO: connect to real AI backend endpoint (geocoding + proximity + AI ranking)
-    const r = await findNearbySocieties(addr);
-    setResults(r);
-    setLoading(false);
-  };
+  useEffect(() => {
+    let isMounted = true;
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const res = await societyService.list(query);
+        if (isMounted) setSocieties(res || []);
+      } catch (err) {
+        toast.error("Failed to load societies");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      loadData();
+    }, 150);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  const filtered = societies.filter((s) =>
+    s.name.toLowerCase().includes(query.toLowerCase()) ||
+    s.address.toLowerCase().includes(query.toLowerCase())
+  );
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <Label>Your address</Label>
-        <div className="mt-2 flex gap-2">
-          <Input placeholder="e.g. 12 Park Ave, Bengaluru" value={addr} onChange={(e) => setAddr(e.target.value)} />
-          <Button onClick={search} disabled={loading}>
-            <Sparkles className="mr-2 h-4 w-4" />
-            {loading ? "Searching…" : "Find societies"}
-          </Button>
+    <Card className="border-line/60 shadow-md">
+      <CardContent className="pt-6 space-y-4">
+        <div>
+          <Label className="text-xs font-bold text-ink uppercase tracking-wider">Search Societies by Name</Label>
+          <div className="relative mt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Type to search society by name or address (e.g. Green Oasis, Sunrise)..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-9 pr-8 text-sm h-11 border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground hover:text-ink"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {query ? `Filtering societies matching "${query}"` : "All active registered societies on CEN network."}
+          </p>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">AI-powered: we rank societies by proximity to your address.</p>
 
-        <div className="mt-6 space-y-3">
-          {results.map((r) => (
-            <div key={r.society.id} className="flex items-center justify-between rounded-lg border p-4">
-              <div>
-                <div className="font-semibold">{r.society.name}</div>
-                <div className="text-sm text-muted-foreground">{r.society.type} · {r.distanceKm} km away</div>
-                <div className="mt-1 text-xs text-muted-foreground italic">{r.matchReason}</div>
-              </div>
-              <Button onClick={() => onPick(r.society)}>Select</Button>
+        <div className="mt-4 space-y-3">
+          {loading ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">Loading societies directory...</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground space-y-2">
+              <p className="font-semibold text-ink">No societies found matching "{query}"</p>
+              <p className="text-xs text-muted-foreground">Try clearing your search term or searching by a different name/keyword.</p>
             </div>
-          ))}
+          ) : (
+            filtered.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between rounded-xl border border-line/60 p-4 bg-white hover:border-deep-forest/40 hover:shadow-sm transition-all"
+              >
+                <div>
+                  <div className="font-semibold text-ink flex items-center gap-2">
+                    {s.name}
+                    {s.status === "active" && (
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                        Active Network
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">{s.type} · {s.address}</div>
+                </div>
+                <Button onClick={() => onPick(s)} className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-9 px-4">
+                  Select
+                </Button>
+              </div>
+            ))
+          )}
         </div>
       </CardContent>
     </Card>
@@ -188,12 +243,20 @@ function JoinByKey({ onPick }: { onPick: (s: Society) => void }) {
   );
 }
 
-function JoinFlow({ society, step, setStep, onBack }: {
-  society: Society; step: 1 | 2 | 3 | 4;
-  setStep: (s: 1 | 2 | 3 | 4) => void; onBack: () => void;
+function JoinFlow({
+  society,
+  step,
+  setStep,
+  onBack,
+}: {
+  society: Society;
+  step: 1 | 2 | 3 | 4;
+  setStep: (s: 1 | 2 | 3 | 4) => void;
+  onBack: () => void;
 }) {
   const { user } = useAuth();
   const [households, setHouseholds] = useState<Household[]>([]);
+  const [primaryLeadsMap, setPrimaryLeadsMap] = useState<Record<string, string>>({});
   const [chosen, setChosen] = useState<Household | null>(null);
   const [form, setForm] = useState({ name: user?.name || "", contact: user?.email || "" });
   const [file, setFile] = useState<string>("");
@@ -211,9 +274,23 @@ function JoinFlow({ society, step, setStep, onBack }: {
   }, []);
 
   const loadHouseholds = async () => {
-    // TODO: replace with real API call to backend
     const list = await householdService.listBySociety(society.id);
-    setHouseholds(list);
+    const users = await userService.listBySociety(society.id);
+
+    // Build map of householdId -> Primary Resident Name
+    const map: Record<string, string> = {};
+    if (Array.isArray(users)) {
+      users.forEach((u) => {
+        if (u.householdId) {
+          if (u.isPrimaryResident || !map[u.householdId]) {
+            map[u.householdId] = u.name;
+          }
+        }
+      });
+    }
+
+    setPrimaryLeadsMap(map);
+    setHouseholds(list || []);
   };
 
   if (step === 1 && households.length === 0) loadHouseholds();
@@ -224,39 +301,111 @@ function JoinFlow({ society, step, setStep, onBack }: {
     ? households.slice((joinPage - 1) * threshold, joinPage * threshold)
     : households;
 
+  const chosenLeadName = chosen ? (primaryLeadsMap[chosen.id] || chosen.claimedByName || "Primary Resident") : "";
+  const isChosenOccupied = chosen ? (chosen.claimed || !!chosen.claimedByUserId || (chosen.occupantsCount && chosen.occupantsCount > 0)) : false;
+
   return (
-    <div className="mx-auto max-w-2xl p-4 py-10">
-      <button onClick={onBack} className="text-sm text-muted-foreground hover:underline">← Choose a different society</button>
-      <Card className="mt-4">
-        <CardHeader>
+    <div className="mx-auto max-w-3xl p-4 py-10">
+      <button onClick={onBack} className="text-sm font-semibold text-deep-forest hover:underline cursor-pointer">← Choose a different society</button>
+      <Card className="mt-4 border-line/65 shadow-lg bg-white overflow-hidden">
+        <CardHeader className="bg-panel/40 border-b border-line/50 pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle>{society.name}</CardTitle>
-            <Badge>Step {step} of 4</Badge>
+            <div>
+              <CardTitle className="text-lg font-bold text-ink">{society.name}</CardTitle>
+              <CardDescription className="text-xs text-on-surface-variant mt-0.5">{society.address}</CardDescription>
+            </div>
+            <Badge className="bg-deep-forest text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1">Step {step} of 4</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {step === 1 && (
             <>
-              <Label>Claim your household</Label>
-              <div className="mt-2 grid max-h-72 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
-                {displayHouseholds.map((h) => (
-                  <button
-                    key={h.id}
-                    disabled={h.claimed}
-                    onClick={() => setChosen(h)}
-                    className={`rounded-md border p-3 text-sm ${
-                      h.claimed
-                        ? "cursor-not-allowed bg-muted text-muted-foreground"
-                        : chosen?.id === h.id
-                          ? "border-primary bg-primary/10"
-                          : "hover:border-primary"
-                    }`}
-                  >
-                    {h.unitNumber}
-                    {h.claimed && <div className="text-[10px]">Taken</div>}
-                  </button>
-                ))}
+              <div className="space-y-1">
+                <Label className="text-xs uppercase font-extrabold tracking-wider text-on-surface-variant">Select Household Unit</Label>
+                <p className="text-xs text-on-surface-variant leading-relaxed">
+                  Select an available vacant unit to become the <strong>Primary Lead</strong>, or select an occupied unit to join as a <strong>Secondary Member</strong> (approval request routed to the Primary Lead).
+                </p>
               </div>
+
+              <div className="mt-4 grid max-h-80 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 overflow-y-auto p-1">
+                {displayHouseholds.map((h) => {
+                  const maxM = h.maxMembers || 4;
+                  const primaryLeadName = primaryLeadsMap[h.id] || h.claimedByName;
+                  const isOccupied = h.claimed || !!h.claimedByUserId || !!primaryLeadName || (h.occupantsCount && h.occupantsCount > 0);
+                  const occ = h.occupantsCount || (isOccupied ? 1 : 0);
+                  const isFull = occ >= maxM;
+                  const isChosen = chosen?.id === h.id;
+
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      disabled={isFull}
+                      onClick={() => setChosen(h)}
+                      className={`rounded-xl border p-3.5 text-left transition-all cursor-pointer flex flex-col justify-between min-h-[82px] relative overflow-hidden ${
+                        isFull
+                          ? "cursor-not-allowed bg-slate-100/70 border-slate-200 text-slate-400 opacity-60"
+                          : isChosen
+                            ? isOccupied
+                              ? "border-amber-400 bg-amber-50/90 ring-2 ring-amber-300 shadow-xs"
+                              : "border-emerald-500 bg-emerald-50/90 ring-2 ring-emerald-300 shadow-xs"
+                            : isOccupied
+                              ? "border-amber-200/90 bg-gradient-to-br from-amber-50/40 to-white hover:border-amber-400 hover:bg-amber-50/80 text-ink"
+                              : "border-line bg-white hover:border-emerald-400 text-ink hover:shadow-2xs"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 w-full border-b border-line/20 pb-1.5">
+                        <span className="font-extrabold text-sm text-ink">{h.unitNumber}</span>
+                        <Badge className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border ${
+                          isFull
+                            ? "bg-slate-200 text-slate-700 border-slate-300"
+                            : isOccupied
+                              ? "bg-amber-100 text-amber-950 border-amber-300"
+                              : "bg-emerald-100 text-emerald-900 border-emerald-300"
+                        }`}>
+                          {isFull ? `Full (${occ}/${maxM})` : isOccupied ? `${occ}/${maxM} Filled` : `Vacant`}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-2 text-[10px] font-semibold text-on-surface-variant truncate">
+                        {isFull ? (
+                          <span className="text-slate-500">Unit Capacity Full</span>
+                        ) : isOccupied ? (
+                          <span className="text-amber-950 font-bold truncate flex items-center gap-1">
+                            <span className="text-amber-600">👑</span> {primaryLeadName ? `Lead: ${primaryLeadName}` : "Primary Lead Occupied"}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-800 font-bold flex items-center gap-1">
+                            <span>🛡️</span> Vacant (Admin Approval)
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {chosen && (
+                <div className={`mt-5 rounded-xl p-4 border text-xs flex items-start gap-3 shadow-xs ${
+                  isChosenOccupied
+                    ? "bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-white border-amber-300 text-amber-950"
+                    : "bg-gradient-to-r from-emerald-50/90 via-emerald-50/50 to-white border-emerald-300 text-emerald-950"
+                }`}>
+                  <div className="text-lg">
+                    {isChosenOccupied ? "👑" : "🛡️"}
+                  </div>
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="font-bold text-sm">
+                      Household Unit {chosen.unitNumber} Selected
+                    </div>
+                    <div className="text-xs leading-relaxed opacity-90">
+                      {isChosenOccupied
+                        ? `This unit is currently lead by ${chosenLeadName}. Your request will be sent directly to ${chosenLeadName} for approval as a Secondary Member.`
+                        : `This unit is currently vacant. Upon approval by Society Administration, you will be assigned as the Primary Resident Lead.`}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {showPagination && (
                 <div className="flex justify-between items-center mt-4 pt-3 border-t border-line/45">
@@ -284,14 +433,14 @@ function JoinFlow({ society, step, setStep, onBack }: {
                 </div>
               )}
 
-              <Button className="mt-4 w-full" disabled={!chosen} onClick={() => setStep(2)}>Continue</Button>
+              <Button className="mt-5 w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer active:scale-98 transition-all" disabled={!chosen} onClick={() => setStep(2)}>Continue to Resident Info</Button>
             </>
           )}
           {step === 2 && (
-            <div className="space-y-3">
-              <div><Label>Full name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div><Label>Contact</Label><Input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></div>
-              <Button className="w-full" disabled={!form.name || !form.contact} onClick={() => setStep(3)}>Continue</Button>
+            <div className="space-y-4">
+              <div><Label className="text-xs font-bold text-ink">Full name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border-line-strong text-xs h-10 rounded-lg" /></div>
+              <div><Label className="text-xs font-bold text-ink">Contact Email</Label><Input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} className="border-line-strong text-xs h-10 rounded-lg" /></div>
+              <Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer active:scale-98 transition-all" disabled={!form.name || !form.contact} onClick={() => setStep(3)}>Continue to ID Upload</Button>
             </div>
           )}
           {step === 3 && (
@@ -317,6 +466,10 @@ function JoinFlow({ society, step, setStep, onBack }: {
                         onChange={(e) => {
                           const selected = e.target.files?.[0];
                           if (selected) {
+                            if (selected.size > 1 * 1024 * 1024) {
+                              toast.error("ID proof file size must be less than 1 MB.");
+                              return;
+                            }
                             setFile(selected.name);
                             const reader = new FileReader();
                             reader.onload = () => {
@@ -334,8 +487,8 @@ function JoinFlow({ society, step, setStep, onBack }: {
               ) : (
                 <label className="flex flex-col cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line-strong/60 p-8 text-sm text-muted-foreground hover:bg-muted/40 hover:border-deep-forest/50 transition-all">
                   <Upload className="h-6 w-6 text-deep-forest" />
-                  <span className="font-semibold text-ink text-xs">{file ? `Selected: ${file}` : "Click to select ID image"}</span>
-                  <span className="text-[10px] text-on-surface-variant">PNG, JPG, JPEG or WebP image formats</span>
+                  <span className="font-semibold text-ink text-xs">{file ? `Selected: ${file}` : "Click to select ID image (Max 1 MB)"}</span>
+                  <span className="text-[10px] text-on-surface-variant">PNG, JPG, JPEG or WebP (Max 1 MB)</span>
                   <input 
                     type="file" 
                     accept="image/*"
@@ -343,6 +496,10 @@ function JoinFlow({ society, step, setStep, onBack }: {
                     onChange={(e) => {
                       const selected = e.target.files?.[0];
                       if (selected) {
+                        if (selected.size > 1 * 1024 * 1024) {
+                          toast.error("ID proof file size must be less than 1 MB.");
+                          return;
+                        }
                         setFile(selected.name);
                         const reader = new FileReader();
                         reader.onload = () => {
@@ -379,10 +536,12 @@ function JoinFlow({ society, step, setStep, onBack }: {
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 className="h-14 w-14 text-emerald-600" />
               <div className="text-lg font-bold text-ink">Request Submitted Successfully</div>
-              <p className="text-sm text-on-surface-variant leading-relaxed">
-                Your request has been sent to your society coordinator for approval. You can now enter the console dashboard to view your status.
+              <p className="text-sm text-on-surface-variant leading-relaxed max-w-md">
+                {isChosenOccupied
+                  ? `Your request to join unit ${chosen?.unitNumber} as a Secondary Member has been sent directly to the Primary Lead (${chosenLeadName}) for approval.`
+                  : `Your request to join unit ${chosen?.unitNumber} as Primary Lead has been sent to the Society Admin for approval.`}
               </p>
-              <Link to="/app/dashboard"><Button className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 px-6 rounded-lg active:scale-98 transition-all">Go to Dashboard</Button></Link>
+              <Link to="/app/dashboard"><Button className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 px-6 rounded-lg active:scale-98 transition-all mt-2">Go to Console Dashboard</Button></Link>
             </div>
           )}
         </CardContent>

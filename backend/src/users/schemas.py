@@ -41,11 +41,26 @@ class UserResponse(UserBase):
     is_coordinator: bool = False
     avatar_color: Optional[str] = "#0ea5e9"
     has_completed_survey: bool = False
+    is_active: bool = True
+    is_household_enabled: bool = True
+    is_primary_resident: bool = False
+    can_manage_onboarding: bool = True
+    can_deactivate_residents: bool = False
 
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
         from_attributes=True,
+    )
+
+
+class PromoteCoordinatorPayload(BaseModel):
+    can_manage_onboarding: bool = True
+    can_deactivate_residents: bool = False
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
     )
 
 

@@ -23,10 +23,10 @@ export const Route = createFileRoute("/login")({
 });
 
 const DEMO = [
-  { role: "Owner", email: "owner@cen.app", desc: "Manage all societies", color: "bg-teal-50 border-teal-200 text-teal-800" },
-  { role: "Admin", email: "admin@cen.app", desc: "Oversee single network", color: "bg-indigo-50 border-indigo-200 text-indigo-800" },
-  { role: "Coordinator", email: "coord@cen.app", desc: "Disputes & listings", color: "bg-emerald-50 border-emerald-200 text-emerald-800" },
-  { role: "Resident", email: "resident@cen.app", desc: "Exchange skills & help", color: "bg-slate-50 border-slate-200 text-slate-800" },
+  { role: "Owner (Aman)", email: "owner@cen.app", desc: "Manage all societies", color: "bg-teal-50 border-teal-200 text-teal-800" },
+  { role: "Admin (Rohit)", email: "admin@cen.app", desc: "Oversee single network", color: "bg-indigo-50 border-indigo-200 text-indigo-800" },
+  { role: "Coordinator (Vinay)", email: "coord@cen.app", desc: "Disputes & listings", color: "bg-emerald-50 border-emerald-200 text-emerald-800" },
+  { role: "Resident (Aman)", email: "resident@cen.app", desc: "Exchange skills & help", color: "bg-slate-50 border-slate-200 text-slate-800" },
 ];
 
 function Login() {
@@ -38,26 +38,34 @@ function Login() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const u = await login(email, pw);
-    if (!u) return toast.error("No account found — try a demo email below.");
-    toast.success(`Welcome ${u.name}`);
-    if (redirect) {
-      nav({ to: redirect });
-    } else {
-      nav({ to: "/app/dashboard" });
-    }
-  };
-
-  const quick = async (em: string) => {
-    setEmail(em);
-    const u = await login(em, "password123");
-    if (u) {
-      toast.success(`Demo Login: connected as ${u.role}`);
+    try {
+      const u = await login(email, pw);
+      if (!u) return toast.error("No account found — try a demo email below.");
+      toast.success(`Welcome ${u.name}`);
       if (redirect) {
         nav({ to: redirect });
       } else {
         nav({ to: "/app/dashboard" });
       }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to log in.");
+    }
+  };
+
+  const quick = async (em: string) => {
+    setEmail(em);
+    try {
+      const u = await login(em, "password123");
+      if (u) {
+        toast.success(`Connected as ${u.name} (${u.role})`);
+        if (redirect) {
+          nav({ to: redirect });
+        } else {
+          nav({ to: "/app/dashboard" });
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to log in.");
     }
   };
 
@@ -152,7 +160,7 @@ function Login() {
                   <Label className="text-xs font-bold text-ink">Email Address</Label>
                   <Input 
                     type="email" 
-                    placeholder="name@society.com" 
+                    placeholder="rohit@cen.app" 
                     required 
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)}

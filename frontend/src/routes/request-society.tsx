@@ -30,6 +30,7 @@ function RequestSociety() {
     applicantContact: "",
     reason: "",
     residentCount: 100,
+    membersPerHousehold: 4,
     initialCredits: 10,
   });
 
@@ -62,6 +63,7 @@ function RequestSociety() {
       applicantContact: user?.email || form.applicantContact || "contact@cen.app",
       reason: form.reason || "Request to setup society network",
       residentCount: Number(form.residentCount) || 100,
+      membersPerHousehold: Number(form.membersPerHousehold) || 4,
       initialCredits: Number(form.initialCredits) || 10,
     };
     try {
@@ -235,13 +237,17 @@ function RequestSociety() {
                 <Input id="ac" required value={form.applicantContact} onChange={(e) => upd("applicantContact", e.target.value)} />
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <Label htmlFor="rc">Suggested Total Slots (Households)</Label>
+                <Label htmlFor="rc">Suggested Total Units</Label>
                 <Input id="rc" type="number" required min={1} value={form.residentCount} onChange={(e) => upd("residentCount", e.target.value === "" ? "" as any : Number(e.target.value))} />
               </div>
               <div>
-                <Label htmlFor="ic">Suggested Initial Credits per Slot</Label>
+                <Label htmlFor="mph">Members / Slot Limit</Label>
+                <Input id="mph" type="number" required min={1} max={20} value={form.membersPerHousehold} onChange={(e) => upd("membersPerHousehold", e.target.value === "" ? "" as any : Number(e.target.value))} />
+              </div>
+              <div>
+                <Label htmlFor="ic">Initial Credits / Slot</Label>
                 <Input id="ic" type="number" required min={0} value={form.initialCredits} onChange={(e) => upd("initialCredits", e.target.value === "" ? "" as any : Number(e.target.value))} />
               </div>
             </div>

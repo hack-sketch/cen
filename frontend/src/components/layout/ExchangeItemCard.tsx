@@ -30,7 +30,9 @@ export interface ExchangeItemCardProps {
   tags?: string[];
   available?: boolean;
   type: "skill" | "resource";
+  myPendingBookingId?: string;
   onAction: (id: string, userId: string) => Promise<any>;
+  onCancelRequest?: (bookingId: string) => Promise<any>;
   categoryColors?: Record<string, string>;
 }
 
@@ -58,35 +60,44 @@ export function ExchangeItemCard({
   tags = [],
   available = true,
   type,
+  myPendingBookingId,
   onAction,
+  onCancelRequest,
   categoryColors = DEFAULT_CAT_COLORS,
 }: ExchangeItemCardProps) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const isOwner = providerId === user!.id;
   const insCredits = (user!.creditBalance ?? 0) < credits;
 
+  const hasPendingRequest = Boolean(myPendingBookingId);
+
   // Determine dialog details based on type
   const isSkill = type === "skill";
-  const dialogTitle = isSkill ? "Confirm Booking" : "Request to Borrow";
+  const dialogTitle = isSkill ? "Send Skill Purchase Request" : "Request to Borrow Resource";
   const dialogDescription = isSkill
-    ? `Are you sure you want to spend ${credits} Credits to book "${title}" from ${providerName}?`
-    : `Are you sure you want to borrow "${title}" from ${providerName}? This will spend ${credits} Credits from your balance.`;
+    ? `Send a purchase request for "${title}" (${credits} Credits) to ${providerName}? Credits will only be transferred after ${providerName} approves your request.`
+    : `Send a borrow request for "${title}" (${credits} Credits) to ${providerName}? Credits will only be transferred after ${providerName} approves your request.`;
   
   const successToast = isSkill
-    ? `Booked ${title} (-${credits} credits)`
-    : `Request sent: Borrowed ${title}`;
+    ? `Request sent to ${providerName}! Awaiting owner approval.`
+    : `Borrow request sent to ${providerName}! Awaiting owner approval.`;
 
   const ctaLabel = isSkill
     ? isOwner
       ? "My Offered Skill"
+      : hasPendingRequest
+      ? "Request Sent"
       : insCredits
       ? `Insufficient Credits (${credits} Crd needed)`
       : `Book (${credits} Credits)`
     : isOwner
     ? "My Item"
+    : hasPendingRequest
+    ? "Borrow Request Sent"
     : !available
     ? "Out of Stock"
     : insCredits
@@ -94,8 +105,8 @@ export function ExchangeItemCard({
     : "Request to Borrow";
 
   const isBtnDisabled = isSkill 
-    ? (isOwner || insCredits) 
-    : (!available || isOwner || insCredits);
+    ? (isOwner || insCredits || hasPendingRequest) 
+    : (!available || isOwner || insCredits || hasPendingRequest);
 
   return (
     <>
@@ -150,13 +161,43 @@ export function ExchangeItemCard({
               </div>
             )}
 
-            <Button
-              disabled={isBtnDisabled}
-              onClick={() => setShowConfirm(true)}
-              className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
-            >
-              {ctaLabel}
-            </Button>
+            {hasPendingRequest ? (
+              <div className="space-y-2">
+                <Badge className="w-full bg-blue-50 border-blue-200 text-blue-800 text-xs font-semibold py-1.5 justify-center border flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
+                  Request Sent (Awaiting Owner Approval)
+                </Badge>
+                {onCancelRequest && myPendingBookingId && (
+                  <Button
+                    variant="outline"
+                    disabled={cancelling}
+                    onClick={async () => {
+                      setCancelling(true);
+                      try {
+                        await onCancelRequest(myPendingBookingId);
+                        qc.invalidateQueries();
+                        toast.info("Your request has been cancelled.");
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to cancel request.");
+                      } finally {
+                        setCancelling(false);
+                      }
+                    }}
+                    className="w-full h-8 text-xs font-semibold border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+                  >
+                    Cancel My Request
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Button
+                disabled={isBtnDisabled}
+                onClick={() => setShowConfirm(true)}
+                className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold h-9 rounded-lg text-xs cursor-pointer shadow-sm"
+              >
+                {ctaLabel}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

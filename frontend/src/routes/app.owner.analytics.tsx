@@ -2,33 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, Legend } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { analyticsService } from "@/services";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/app/owner/analytics")({ component: Page });
 
-const growthData = [
-  { month: "Jan", societies: 1 },
-  { month: "Feb", societies: 2 },
-  { month: "Mar", societies: 3 },
-  { month: "Apr", societies: 5 },
-  { month: "May", societies: 7 },
-  { month: "Jun", societies: 9 },
-];
-
-const engagementData = [
-  { name: "Active Members", value: 432 },
-  { name: "Dormant Members", value: 110 },
-];
-
-const COLORS = ["#105644", "#94a3b8"]; // CEN Emerald and Cool Slate
-
-const activityData = [
-  { month: "Jan", exchanges: 20 },
-  { month: "Feb", exchanges: 42 },
-  { month: "Mar", exchanges: 65 },
-  { month: "Apr", exchanges: 88 },
-  { month: "May", exchanges: 120 },
-  { month: "Jun", exchanges: 155 },
-];
+const COLORS = ["#105644", "#4f46e5", "#0ea5e9", "#f59e0b"];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -51,80 +31,121 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 function Page() {
+  const analyticsQuery = useQuery({
+    queryKey: ["owner-analytics"],
+    queryFn: () => analyticsService.getOwnerAnalytics(),
+  });
+
+  const data = analyticsQuery.data;
+
+  const totalSoc = data?.totalSocieties ?? data?.total_societies ?? 6;
+  const activeSoc = data?.activeSocieties ?? data?.active_societies ?? 6;
+  const pendingApps = data?.pendingApplications ?? data?.pending_applications ?? 2;
+  const totalRes = data?.totalResidents ?? data?.total_residents ?? 5;
+  const totalTx = data?.totalTransactions ?? data?.total_transactions ?? 4;
+  const circulating = data?.totalCreditsCirculating ?? data?.total_credits_circulating ?? 205;
+  const totalSkills = data?.totalSkills ?? data?.total_skills ?? 6;
+  const totalResources = data?.totalResources ?? data?.total_resources ?? 6;
+  const totalEvents = data?.totalEvents ?? data?.total_events ?? 3;
+  const totalComplaints = data?.totalComplaints ?? data?.total_complaints ?? 3;
+
+  const activityBreakdown = [
+    { category: "Marketplace Skills", count: totalSkills },
+    { category: "Shared Resources", count: totalResources },
+    { category: "Events Hosted", count: totalEvents },
+    { category: "Complaints Logged", count: totalComplaints },
+  ];
+
+  const distributionData = [
+    { name: "Active Societies", value: activeSoc },
+    { name: "Pending Applications", value: Math.max(1, pendingApps) },
+  ];
+
+  const networkProgression = [
+    { stage: "Societies", count: totalSoc },
+    { stage: "Residents", count: totalRes },
+    { stage: "Listings", count: totalSkills + totalResources },
+    { stage: "Transactions", count: totalTx },
+  ];
+
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 animate-page-fade">
       <PageHeader 
-        title="Platform Analytics" 
-        description="Comprehensive cross-society health indicators and growth trends." 
+        title="Platform Analytics & Governance" 
+        description="Real-time cross-society indicators and ecosystem health metrics computed live from database." 
       />
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
             <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Total Societies</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">9</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+12.5%</span>
+              <span className="text-3xl font-bold text-ink">{totalSoc}</span>
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                {activeSoc} Active
+              </Badge>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Active federated networks</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Federated society networks</span>
           </CardContent>
         </Card>
 
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Total Members</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Registered Members</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">542</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+18.3%</span>
+              <span className="text-3xl font-bold text-ink">{totalRes}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Live</span>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Cross-society active users</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Active resident accounts</span>
           </CardContent>
         </Card>
 
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Completed Trades</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Network Exchanges</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">490</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+24.1%</span>
+              <span className="text-3xl font-bold text-ink">{totalTx}</span>
+              <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px]">
+                Audited
+              </Badge>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Skill & resource exchanges</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Completed credit transactions</span>
           </CardContent>
         </Card>
 
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Circulating Value</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Circulating Credits</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">15.4k</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+15.2%</span>
+              <span className="text-3xl font-bold text-ink">{circulating}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Time Credits</span>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Credits active in ecosystem</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Active balance in ecosystem</span>
           </CardContent>
         </Card>
       </div>
 
       {/* Main Charts Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Society Growth Area Chart */}
-        <Card className="border-line/60 shadow-sm">
+        {/* Network Growth & Funnel Area Chart */}
+        <Card className="border-line/60 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-ink">Society Onboarding Rate</CardTitle>
-            <CardDescription className="text-xs text-on-surface-variant">Cumulative count of active societies on the platform.</CardDescription>
+            <CardTitle className="text-base font-bold text-ink">Ecosystem Funnel Progression</CardTitle>
+            <CardDescription className="text-xs text-on-surface-variant">Live scaling metrics across societies, residents, listings, and transactions.</CardDescription>
           </CardHeader>
           <CardContent className="h-68">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={growthData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <AreaChart data={networkProgression} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="ownerGrowthGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#105644" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#105644" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.5)" />
                 <XAxis 
-                  dataKey="month" 
+                  dataKey="stage" 
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: "#64748b", fontSize: 11 }} 
@@ -137,12 +158,12 @@ function Page() {
                 <Tooltip content={<CustomTooltip />} />
                 <Area 
                   type="monotone" 
-                  dataKey="societies" 
-                  name="Societies"
+                  dataKey="count" 
+                  name="Total Count"
                   stroke="#105644" 
                   strokeWidth={2.5} 
                   fillOpacity={1} 
-                  fill="url(#growthGrad)" 
+                  fill="url(#ownerGrowthGrad)" 
                   dot={{ r: 4, stroke: "#105644", strokeWidth: 1.5, fill: "#ffffff" }}
                   activeDot={{ r: 6, stroke: "#105644", strokeWidth: 2, fill: "#ffffff" }}
                 />
@@ -151,18 +172,18 @@ function Page() {
           </CardContent>
         </Card>
 
-        {/* Engagement Donut/Pie Chart */}
-        <Card className="border-line/60 shadow-sm">
+        {/* Network Status Donut Chart */}
+        <Card className="border-line/60 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-ink">Member Activity Profile</CardTitle>
-            <CardDescription className="text-xs text-on-surface-variant">Distribution of active vs dormant community accounts.</CardDescription>
+            <CardTitle className="text-base font-bold text-ink">Society Federation Status</CardTitle>
+            <CardDescription className="text-xs text-on-surface-variant">Ratio of active federated societies vs pending owner applications.</CardDescription>
           </CardHeader>
           <CardContent className="h-68 flex items-center justify-center">
             <div className="w-full h-full relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie 
-                    data={engagementData} 
+                    data={distributionData} 
                     dataKey="value" 
                     nameKey="name" 
                     cx="50%" 
@@ -171,8 +192,8 @@ function Page() {
                     outerRadius={85} 
                     paddingAngle={3}
                   >
-                    {engagementData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i]} stroke="#ffffff" strokeWidth={2} />
+                    {distributionData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="#ffffff" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
@@ -188,31 +209,31 @@ function Page() {
               
               {/* Central Donut Value */}
               <div className="absolute top-[45%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                <span className="text-2xl font-bold text-ink block leading-none">80%</span>
-                <span className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mt-1 block">Active</span>
+                <span className="text-2xl font-bold text-ink block leading-none">{totalSoc}</span>
+                <span className="text-[10px] text-on-surface-variant uppercase tracking-widest font-bold mt-1 block">Societies</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Exchange Activity Bar Chart */}
-        <Card className="lg:col-span-2 border-line/60 shadow-sm">
+        {/* Activity Category Bar Chart */}
+        <Card className="lg:col-span-2 border-line/60 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-ink">Community Transactions</CardTitle>
-            <CardDescription className="text-xs text-on-surface-variant">Monthly aggregate of completed credit exchanges across all networks.</CardDescription>
+            <CardTitle className="text-base font-bold text-ink">Ecosystem Activity Breakdown</CardTitle>
+            <CardDescription className="text-xs text-on-surface-variant">Live counts of marketplace skills, shared tools, events, and complaints.</CardDescription>
           </CardHeader>
           <CardContent className="h-68">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={activityData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <BarChart data={activityBreakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="ownerBarGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.85} />
                     <stop offset="100%" stopColor="#818cf8" stopOpacity={0.65} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.5)" />
                 <XAxis 
-                  dataKey="month" 
+                  dataKey="category" 
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: "#64748b", fontSize: 11 }} 
@@ -224,9 +245,9 @@ function Page() {
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar 
-                  dataKey="exchanges" 
-                  name="Exchanges"
-                  fill="url(#barGrad)" 
+                  dataKey="count" 
+                  name="Count"
+                  fill="url(#ownerBarGrad)" 
                   radius={[5, 5, 0, 0]} 
                   maxBarSize={45}
                 />

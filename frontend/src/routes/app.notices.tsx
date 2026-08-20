@@ -198,8 +198,8 @@ function NewNoticeDialog({ disabled }: { disabled: boolean }) {
                 qc.invalidateQueries();
                 setForm({ title: "", content: "" });
                 toast.success("Notice broadcasted successfully!");
-              } catch {
-                toast.error("Failed to post notice.");
+              } catch (err: any) {
+                toast.error(err.message || "Failed to post notice.");
               } finally {
                 setLoading(false);
               }

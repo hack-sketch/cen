@@ -10,33 +10,6 @@ import { __mockState } from "./index";
 const delay = <T>(v: T, ms = 300): Promise<T> =>
   new Promise((r) => setTimeout(() => r(v), ms));
 
-// AI 1 — Find nearby societies (public join flow)
-export async function findNearbySocieties(address: string) {
-  try {
-    const res = await apiFetch<any[]>("/ai/find-nearby-societies", {
-      method: "POST",
-      body: JSON.stringify({ address }),
-    });
-    if (Array.isArray(res) && res.length > 0) {
-      return res;
-    }
-  } catch (err) {
-    console.warn("[AI API Notice] findNearbySocieties fallback:", err);
-  }
-  const list = __mockState.societies
-    .filter((s) => s.status === "active")
-    .map((s, i) => ({
-      society: s,
-      distanceKm: +(0.4 + i * 1.3 + Math.random() * 0.8).toFixed(1),
-      matchReason:
-        address && address.toLowerCase().includes("mg")
-          ? "Close to your listed address (MG Road area)"
-          : `Nearest active ${s.type.toLowerCase()} in your region`,
-    }))
-    .sort((a, b) => a.distanceKm - b.distanceKm);
-  return delay(list);
-}
-
 // AI 2 — Chatbot (RAG-style assistant powered by Gemini)
 export async function chatbotQuery(
   message: string,
@@ -279,9 +252,22 @@ export async function autoTag(text: string): Promise<{ category: string; tags: s
 
 // AI 5 — Notice summarizer
 export async function summarizeNotice(content: string): Promise<string> {
+  try {
+    const res = await apiFetch<{ summary: string }>("/ai/summarize-notice", {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+    if (res && res.summary) {
+      return res.summary;
+    }
+  } catch (err) {
+    console.warn("[AI API Notice] summarizeNotice fallback:", err);
+  }
+
   const first = content.split(/[.!?]/).slice(0, 2).join(". ").trim();
   return delay(`Summary: ${first}. (Key point auto-extracted.)`);
 }
+
 
 // AI 6 — Complaint categorization & priority
 export async function categorizeComplaint(text: string): Promise<{ category: string; priority: "low" | "medium" | "high" }> {
@@ -333,26 +319,5 @@ export async function suggestVolunteers(eventId: string) {
   return delay(scoredResidents.slice(0, 4));
 }
 
-// AI 8 — Document Vision Verification for ID Proof
-export async function verifyIdProof(imageUrl: string, userName?: string) {
-  try {
-    const res = await apiFetch<any>("/ai/verify-id-proof", {
-      method: "POST",
-      body: JSON.stringify({ imageUrl, userName }),
-    });
-    if (res) return res;
-  } catch (err) {
-    console.warn("[AI API Notice] verifyIdProof fallback:", err);
-  }
-  return delay({
-    isValidId: true,
-    confidence: 0.92,
-    documentType: "Identity Document",
-    extractedName: userName,
-    reason: "Document verified successfully",
-  });
-}
-
 export type MatchResult = Awaited<ReturnType<typeof matchSkillResource>>[number];
-export type NearbyResult = Awaited<ReturnType<typeof findNearbySocieties>>[number];
 export type VolunteerSuggestion = Awaited<ReturnType<typeof suggestVolunteers>>[number];

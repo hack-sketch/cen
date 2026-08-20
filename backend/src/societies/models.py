@@ -31,6 +31,7 @@ class Society(Base):
     longitude = Column(Float, nullable=False, default=77.59)
     admin_id = Column(String, nullable=False, index=True)
     capacity = Column(Integer, nullable=False, default=100)
+    members_per_household = Column(Integer, nullable=False, default=4)
     initial_credits = Column(Integer, nullable=False, default=10)
     household_range_start = Column(Integer, nullable=False, default=1)
     household_range_end = Column(Integer, nullable=False, default=100)
@@ -53,6 +54,7 @@ class SocietyApplication(Base):
     status = Column(String, nullable=False, default="pending")  # pending | approved | rejected
     submitted_at = Column(String, nullable=False, default=lambda: date.today().isoformat())
     resident_count = Column(Integer, nullable=False, default=100)
+    members_per_household = Column(Integer, nullable=False, default=4)
     initial_credits = Column(Integer, nullable=False, default=10)
 
 
@@ -64,6 +66,8 @@ class Household(Base):
     unit_number = Column(String, nullable=False)
     claimed = Column(Boolean, nullable=False, default=False)
     claimed_by_user_id = Column(String, nullable=True, index=True)
+    max_members = Column(Integer, nullable=False, default=4)
+    occupants_count = Column(Integer, nullable=False, default=0)
 
 
 class JoinRequest(Base):
@@ -72,9 +76,12 @@ class JoinRequest(Base):
     id = Column(String, primary_key=True, default=generate_jr_id, index=True)
     user_id = Column(String, nullable=False, index=True)
     user_name = Column(String, nullable=False)
+    user_email = Column(String, nullable=True)
     society_id = Column(String, nullable=False, index=True)
     household_id = Column(String, nullable=False, index=True)
     unit_number = Column(String, nullable=False)
     id_proof_url = Column(String, nullable=False, default="mock://id-proof.pdf")
     status = Column(String, nullable=False, default="pending")  # pending | approved | rejected
     submitted_at = Column(String, nullable=False, default=lambda: date.today().isoformat())
+    approver_type = Column(String, nullable=False, default="admin")  # admin | primary_resident
+    target_approver_id = Column(String, nullable=True)

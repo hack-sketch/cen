@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import { householdService, joinRequestService, societyService } from "@/services";
+import { householdService, joinRequestService, societyService, userService } from "@/services";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy, FileCheck, Sparkles, CheckCircle2, XCircle } from "lucide-react";
+import { Copy, FileCheck, Sparkles, CheckCircle2, XCircle, Building2, Pencil, Trash2, Users, Home, Crown, ShieldAlert, UserX, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 
@@ -52,6 +52,7 @@ function Households({ sid }: { sid: string }) {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ["hh", sid], queryFn: () => householdService.listBySociety(sid) });
   const socQuery = useQuery({ queryKey: ["society", sid], queryFn: () => societyService.getById(sid) });
+  const allUsers = useQuery({ queryKey: ["allRes", sid], queryFn: () => userService.listBySociety(sid) });
   const [unit, setUnit] = useState("");
 
   const capacity = socQuery.data?.capacity || 100;
@@ -220,6 +221,22 @@ function Households({ sid }: { sid: string }) {
     setEditOpen(false);
     setSelectedHh(null);
     qc.invalidateQueries({ queryKey: ["hh", sid] });
+  };
+
+  const handleToggleDeactivate = async (u: any) => {
+    try {
+      if (u.isActive !== false) {
+        await userService.deactivateUser(u.id);
+        toast.success(`Deactivated ${u.name}`);
+      } else {
+        await userService.reactivateUser(u.id);
+        toast.success(`Reactivated ${u.name}`);
+      }
+      qc.invalidateQueries({ queryKey: ["allRes", sid] });
+      qc.invalidateQueries({ queryKey: ["hh", sid] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update user status");
+    }
   };
 
   const handleDelete = async () => {
@@ -427,7 +444,7 @@ function Households({ sid }: { sid: string }) {
               );
             })()}
 
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {(() => {
                 const totalUnits = list.data?.length || 0;
                 const startIdx = totalUnits > 50 
@@ -441,39 +458,246 @@ function Households({ sid }: { sid: string }) {
                       : Math.min(currentPage * 50, totalUnits))
                   : totalUnits;
 
-                return list.data?.slice(startIdx, endIdx).map((h) => (
-                  <button
-                    key={h.id}
-                    onClick={() => handleOpenEdit(h)}
-                    type="button"
-                    className={cn(
-                      "rounded-xl border p-3 text-center text-xs transition-all hover:-translate-y-[1px] hover:shadow-sm cursor-pointer",
-                      h.claimed 
-                        ? "bg-emerald-50/70 border-emerald-200 text-emerald-800 font-semibold" 
-                        : "bg-slate-50/40 border-line hover:border-line-strong text-ink"
-                    )}
-                  >
-                    <div className="font-bold tracking-tight truncate">{h.unitNumber}</div>
-                    <div className="mt-1 text-[9px] opacity-75 font-medium">{h.claimed ? "Claimed" : "Available"}</div>
-                  </button>
-                ));
+                return list.data?.slice(startIdx, endIdx).map((h) => {
+                  const leadUser = allUsers.data?.find((u: any) => u.id === h.claimedByUserId || (u.householdId === h.id && u.isPrimaryResident));
+                  const membersCount = allUsers.data?.filter((u: any) => u.householdId === h.id || u.householdId === h.unitNumber).length || (h.claimed ? 1 : 0);
+                  const maxCap = h.maxMembers || 4;
+                  const occPct = Math.min(100, Math.round((membersCount / maxCap) * 100));
+
+                  return (
+                    <Card
+                      key={h.id}
+                      onClick={() => handleOpenEdit(h)}
+                      className={cn(
+                        "group border shadow-xs hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden flex flex-col justify-between hover:-translate-y-0.5 relative",
+                        h.claimed
+                          ? "bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/20 border-emerald-300/80 hover:border-emerald-500"
+                          : "bg-white border-line/60 hover:border-deep-forest/40"
+                      )}
+                    >
+                      <div className="p-4 space-y-3">
+                        {/* Header: Unit Icon & Title + Status Pill */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={cn(
+                              "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs shadow-inner border",
+                              h.claimed
+                                ? "bg-emerald-500/15 text-emerald-900 border-emerald-300"
+                                : "bg-panel text-on-surface-variant border-line/60"
+                            )}>
+                              <Building2 className="h-4 w-4 shrink-0" />
+                            </div>
+                            <span className="font-extrabold text-sm text-ink truncate group-hover:text-deep-forest transition-colors">
+                              Unit {h.unitNumber}
+                            </span>
+                          </div>
+
+                          <Badge className={cn(
+                            "text-[9px] font-bold px-2 py-0.5 shrink-0 rounded-full border",
+                            h.claimed
+                              ? "bg-emerald-100/90 text-emerald-950 border-emerald-300"
+                              : "bg-slate-100 text-slate-700 border-slate-200"
+                          )}>
+                            {h.claimed ? "Claimed" : "Vacant Slot"}
+                          </Badge>
+                        </div>
+
+                        {/* Middle Section: Lead Resident Details */}
+                        <div className="bg-panel/50 rounded-xl p-2.5 border border-line/40 space-y-1.5">
+                          <div className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant/80">
+                            Primary Occupant
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-deep-forest/10 border border-deep-forest/20 text-deep-forest flex items-center justify-center font-bold text-[10px] shrink-0">
+                              {leadUser ? leadUser.name.slice(0, 2).toUpperCase() : (h.claimed ? "RL" : "?")}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-xs text-ink truncate flex items-center gap-1">
+                                <span>{leadUser?.name || (h.claimed ? "Resident Lead" : "Unassigned")}</span>
+                                {h.claimed && <Crown className="h-3 w-3 fill-amber-400 text-amber-600 shrink-0" />}
+                              </div>
+                              <div className="text-[10px] text-on-surface-variant truncate">
+                                {leadUser?.email || (h.claimed ? "Registered Resident" : "No resident assigned")}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Occupancy Progress Meter */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold">
+                            <span className="text-on-surface-variant flex items-center gap-1">
+                              <Users className="h-3 w-3 text-on-surface-variant/80" />
+                              Occupancy Ratio:
+                            </span>
+                            <span className={cn("font-bold text-xs", membersCount > 0 ? "text-emerald-800" : "text-on-surface-variant")}>
+                              {membersCount} / {maxCap} Members
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden border border-line/30">
+                            <div
+                              className={cn(
+                                "h-full rounded-full transition-all duration-300",
+                                occPct === 100 ? "bg-emerald-600" : occPct > 0 ? "bg-emerald-500" : "bg-slate-300"
+                              )}
+                              style={{ width: `${Math.max(5, occPct)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Action Footer */}
+                      <div className="bg-panel/60 border-t border-line/50 px-3 py-2 flex items-center justify-between text-xs">
+                        <span className="text-[10px] font-semibold text-on-surface-variant group-hover:text-ink transition-colors">
+                          Click card to manage
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEdit(h);
+                            }}
+                            className="h-7 px-2 text-[11px] font-semibold text-ink hover:bg-white hover:shadow-xs rounded-lg cursor-pointer flex items-center gap-1"
+                          >
+                            <Pencil className="h-3 w-3 text-on-surface-variant" />
+                            <span>Edit</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                });
               })()}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Edit Household Dialog */}
+      {/* Edit Household & Occupants Inspector Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-md border-line/60 rounded-2xl p-6 bg-white data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+        <DialogContent className="sm:max-w-lg border-line/60 rounded-2xl p-6 bg-white shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="pb-3 border-b border-line/35">
-            <DialogTitle className="text-base font-bold text-ink">Manage Household Unit</DialogTitle>
-            <DialogDescription className="text-xs text-on-surface-variant">Update the unit identifier or remove the card listing.</DialogDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-deep-forest/10 border border-deep-forest/20 text-deep-forest flex items-center justify-center font-bold">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold text-ink">
+                    Manage Unit {selectedHh?.unitNumber}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-on-surface-variant">
+                    Inspect household occupants, manage unit details, or deactivate accounts.
+                  </DialogDescription>
+                </div>
+              </div>
+              <Badge className={selectedHh?.claimed ? "bg-emerald-100 text-emerald-950 border-emerald-300 font-bold" : "bg-slate-100 text-slate-700 border-slate-200"}>
+                {selectedHh?.claimed ? "Claimed" : "Vacant Slot"}
+              </Badge>
+            </div>
           </DialogHeader>
           
-          <div className="space-y-4 pt-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-ink">Household Unit Number / Address</Label>
+          <div className="space-y-5 pt-3">
+            {/* Occupants Roster Section */}
+            {(() => {
+              const occupants = allUsers.data?.filter((u: any) => u.householdId === selectedHh?.id || u.householdId === selectedHh?.unitNumber) || [];
+              const isClaimed = selectedHh?.claimed || occupants.length > 0;
+
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-ink flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-deep-forest" />
+                      Registered Occupants ({occupants.length} / {selectedHh?.maxMembers || 4})
+                    </span>
+                  </div>
+
+                  {occupants.length > 0 ? (
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                      {occupants.map((u: any) => (
+                        <div
+                          key={u.id}
+                          className={cn(
+                            "p-3 rounded-xl border flex items-center justify-between gap-3 shadow-2xs transition-all",
+                            u.isActive === false ? "bg-rose-50/50 border-rose-200 opacity-80" : "bg-panel/50 border-line/60 hover:bg-panel"
+                          )}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={cn(
+                              "w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border shadow-inner",
+                              u.isPrimaryResident ? "bg-amber-500/20 text-amber-950 border-amber-300" : "bg-deep-forest/10 text-deep-forest border-deep-forest/20"
+                            )}>
+                              {u.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-ink truncate flex items-center gap-1.5">
+                                <span>{u.name}</span>
+                                {u.isPrimaryResident && (
+                                  <Badge className="bg-amber-100 text-amber-950 border-amber-300 text-[8px] font-bold px-1.5 py-0">
+                                    ⭐ Primary Lead
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-on-surface-variant truncate">{u.email}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge className={u.isActive === false ? "bg-rose-100 text-rose-800 border-rose-300 text-[9px] font-bold" : "bg-emerald-100 text-emerald-950 border-emerald-300 text-[9px] font-bold"}>
+                              {u.isActive === false ? "Deactivated" : "Active"}
+                            </Badge>
+
+                            <Button
+                              size="sm"
+                              variant={u.isActive === false ? "outline" : "ghost"}
+                              onClick={() => handleToggleDeactivate(u)}
+                              className={cn(
+                                "h-7 text-[10px] font-bold px-2 rounded-lg cursor-pointer transition-all",
+                                u.isActive === false
+                                  ? "border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                                  : "text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                              )}
+                            >
+                              {u.isActive === false ? (
+                                <>
+                                  <UserCheck className="h-3 w-3 mr-1" />
+                                  Reactivate
+                                </>
+                              ) : (
+                                <>
+                                  <UserX className="h-3 w-3 mr-1" />
+                                  Deactivate
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl border border-dashed border-line bg-slate-50/50 text-center space-y-1">
+                      <div className="text-xs font-semibold text-on-surface-variant">No active residents in this household slot</div>
+                      <div className="text-[10px] text-on-surface-variant/70">Occupants can claim this unit or apply via society join request.</div>
+                    </div>
+                  )}
+
+                  {/* Deactivation & Deletion Governance Rule Notice */}
+                  {isClaimed && (
+                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-950 flex items-start gap-2.5">
+                      <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="leading-snug">
+                        <strong className="font-bold">Deletion Protection Active:</strong> Units with residing residents cannot be deleted. Deactivate residents above if account suspension is required.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="space-y-1.5 pt-1">
+              <Label className="text-xs font-bold text-ink">Household Unit Identifier</Label>
               <Input 
                 value={editUnitNumber} 
                 onChange={(e) => setEditUnitNumber(e.target.value)} 
@@ -481,26 +705,35 @@ function Households({ sid }: { sid: string }) {
               />
             </div>
             
-            <div className="flex gap-2 pt-2">
+            <div className="flex items-center gap-2 pt-2">
               <Button 
                 onClick={handleSaveEdit}
                 className="flex-1 bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer active:scale-98 transition-all"
               >
-                Save Changes
+                Save Unit Changes
               </Button>
-              <Button 
-                variant="outline"
-                onClick={triggerDelete}
-                className="border-rose-200 hover:bg-rose-50 text-rose-600 font-semibold text-xs h-10 px-4 rounded-lg cursor-pointer transition-all"
-              >
-                Delete Card
-              </Button>
+              {(() => {
+                const occupants = allUsers.data?.filter((u: any) => u.householdId === selectedHh?.id || u.householdId === selectedHh?.unitNumber) || [];
+                const hasResidents = selectedHh?.claimed || occupants.length > 0;
+
+                return (
+                  <Button 
+                    variant="outline"
+                    disabled={hasResidents}
+                    onClick={triggerDelete}
+                    title={hasResidents ? "Cannot delete unit with active residents. Deactivate residents first." : "Delete vacant household unit"}
+                    className={cn(
+                      "font-semibold text-xs h-10 px-4 rounded-lg transition-all",
+                      hasResidents
+                        ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                        : "border-rose-200 hover:bg-rose-50 text-rose-600 cursor-pointer"
+                    )}
+                  >
+                    Delete Vacant Unit
+                  </Button>
+                );
+              })()}
             </div>
-            {selectedHh?.claimed && (
-              <p className="text-[9px] text-rose-600 font-medium text-center">
-                Warning: This unit is claimed by a resident. Deleting it will disconnect the resident.
-              </p>
-            )}
           </div>
         </DialogContent>
       </Dialog>

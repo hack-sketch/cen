@@ -120,3 +120,34 @@ def test_volunteer_withdrawal(client, db_session):
     # Verify resident ID was removed from event.volunteers
     db_session.refresh(event)
     assert resident.id not in event.volunteers
+
+
+def test_direct_event_leave(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.events.models import EventItem
+
+    owner = create_user(db_session, UserCreate(name="Owner Direct", email="owner_direct@cen.app", password="password123"), role="owner")
+    soc = Society(name="Direct Society", address="5 Direct Rd", admin_id=owner.id, coordinator_count=2, key="DIR-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    resident = create_user(db_session, UserCreate(name="Resident Direct", email="resdirect@cen.app", password="password123"), role="resident")
+    resident.society_id = soc.id
+    db_session.commit()
+
+    event = EventItem(title="Tree Planting", description="Planting trees", date="2026-09-01", created_by_coordinator_id="c2", volunteers_needed=5, volunteers=resident.id, society_id=soc.id)
+    db_session.add(event)
+    db_session.commit()
+
+    login_resp = client.post("/api/v1/auth/login", json={"email": "resdirect@cen.app", "password": "password123"})
+    token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    leave_resp = client.post(f"/api/v1/events/{event.id}/leave", json={"leaveReason": "Schedule overlap"}, headers=headers)
+    assert leave_resp.status_code == 200
+    assert resident.id not in leave_resp.json()["volunteers"]
+
+    db_session.refresh(event)
+    assert resident.id not in event.volunteers

@@ -31,11 +31,17 @@ def get_current_user_from_token(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise UnauthorizedException("User not found")
+    if not user.is_active:
+        raise ForbiddenException("Your account has been deactivated by society administration.")
+    if not user.is_household_enabled:
+        raise ForbiddenException("Your household access has been suspended by your Primary Resident Lead.")
     return user
 
 
 def require_roles(allowed_roles: List[str]):
     def role_checker(current_user=Depends(get_current_user_from_token)):
+        if "coordinator" in allowed_roles and current_user.is_coordinator:
+            return current_user
         if current_user.role not in allowed_roles:
             raise ForbiddenException(
                 f"Role '{current_user.role}' is not authorized to perform this action. Required: {allowed_roles}"

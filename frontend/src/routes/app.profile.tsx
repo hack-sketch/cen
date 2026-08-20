@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +10,22 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { societyService, userService } from "@/services";
 import { useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, ShieldCheck, Mail, User as UserIcon, Building, Activity, Database } from "lucide-react";
+import { CheckCircle2, XCircle, ShieldCheck, Mail, User as UserIcon, Building, Activity, Database, LogOut } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/app/profile")({ component: Page });
 
 function Page() {
+  const navigate = useNavigate();
   const { user, setUserById } = useAuth();
   const qc = useQueryClient();
 
@@ -29,6 +40,7 @@ function Page() {
   const [email, setEmail] = useState(user!.email);
   const [societyName, setSocietyName] = useState(soc.data?.name ?? "");
   const [saving, setSaving] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // Sync state if society data loaded late
   if (soc.data && !societyName && soc.data.name !== societyName) {
@@ -266,6 +278,34 @@ function Page() {
             </Card>
           )}
 
+          {/* Leave Society Action Card (Non-owners only) */}
+          {!isOwner && user!.societyId && (
+            <Card className="border-rose-200 shadow-sm bg-rose-50/30">
+              <CardHeader className="pb-3 border-b border-rose-100">
+                <CardTitle className="text-sm font-bold text-rose-900 flex items-center gap-2">
+                  <LogOut className="h-4 w-4 text-rose-600" />
+                  Leave Society
+                </CardTitle>
+                <CardDescription className="text-xs text-rose-700">
+                  Voluntarily detach your account from <span className="font-bold">{soc.data?.name || "your current society"}</span>.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 flex items-center justify-between">
+                <span className="text-[11px] text-rose-800/80">
+                  Your claimed household and coordinator roles in this society will be released.
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowLeaveConfirm(true)}
+                  className="bg-white hover:bg-rose-100 text-rose-700 border-rose-300 font-semibold text-xs h-9 px-4 cursor-pointer"
+                >
+                  Leave Society
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Safety/Information footer pill */}
           <div className="bg-panel/40 border border-line/45 rounded-xl p-4 flex gap-3 items-start">
             <ShieldCheck className="h-5 w-5 text-deep-forest flex-shrink-0 mt-0.5" />
@@ -278,6 +318,44 @@ function Page() {
           </div>
         </div>
       </div>
+
+      {/* Leave Society Confirmation Dialog */}
+      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
+              <LogOut className="h-5 w-5 text-rose-600 flex-shrink-0" />
+              Confirm Leave Society
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
+              Are you sure you want to leave <span className="font-bold text-ink">{soc.data?.name || "this society"}</span>? Your unit assignment will be un-claimed. You can join another society at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-5 flex gap-2">
+            <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={async () => {
+                try {
+                  await userService.leaveSociety();
+                  await setUserById(user!.id);
+                  qc.invalidateQueries();
+                  toast.success("Successfully left society.");
+                  navigate({ to: "/join-society" });
+                } catch (err: any) {
+                  toast.error(err.message || "Failed to leave society");
+                } finally {
+                  setShowLeaveConfirm(false);
+                }
+              }}
+              className="h-9 px-4 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-98 transition-all"
+            >
+              Confirm Leave
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

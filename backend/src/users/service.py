@@ -1,6 +1,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from src.exceptions import NotFoundException
+from src.exceptions import APIException, ForbiddenException, NotFoundException
+from src.societies.models import Household
 from src.users.models import User
 from src.users.schemas import UserUpdate
 
@@ -20,14 +21,25 @@ def list_coordinators_by_society(db: Session, society_id: str) -> List[User]:
     )
 
 
-def promote_user_to_coordinator(db: Session, user_id: str) -> User:
-    user = get_user_by_id(db, user_id)
-    user.is_coordinator = True
-    if user.role == "resident":
-        user.role = "coordinator"
-    db.commit()
-    db.refresh(user)
-    return user
+def promote_user_to_coordinator(
+    db: Session,
+    user_id: str,
+    can_manage_onboarding: bool = True,
+    can_deactivate_residents: bool = False,
+) -> User:
+    try:
+        user = get_user_by_id(db, user_id)
+        user.is_coordinator = True
+        if user.role == "resident":
+            user.role = "coordinator"
+        user.can_manage_onboarding = can_manage_onboarding
+        user.can_deactivate_residents = can_deactivate_residents
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def update_user_profile(db: Session, user_id: str, update_in: UserUpdate) -> User:
@@ -44,12 +56,18 @@ def update_user_profile(db: Session, user_id: str, update_in: UserUpdate) -> Use
 
 
 def demote_coordinator(db: Session, user_id: str) -> User:
-    user = get_user_by_id(db, user_id)
-    user.is_coordinator = False
-    user.role = "resident"
-    db.commit()
-    db.refresh(user)
-    return user
+    try:
+        user = get_user_by_id(db, user_id)
+        user.is_coordinator = False
+        user.role = "resident"
+        user.can_manage_onboarding = True
+        user.can_deactivate_residents = False
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def update_onboarding_survey(db: Session, user_id: str, interests: List[str], offered_skills: str, volunteer_interest: str) -> User:
@@ -68,6 +86,8 @@ def list_users_by_society(db: Session, society_id: str) -> List[User]:
 
 
 def upload_id_proof(db: Session, user_id: str, id_proof_url: str) -> User:
+    if id_proof_url and len(id_proof_url) > 1_500_000:
+        raise BadRequestException("ID proof document size must be less than 1 MB.")
     user = get_user_by_id(db, user_id)
     user.id_proof_url = id_proof_url
     user.id_proof_uploaded = True
@@ -85,3 +105,117 @@ def verify_user_id_proof(db: Session, user_id: str, verified: bool) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def leave_society(db: Session, user_id: str) -> User:
+    try:
+        user = get_user_by_id(db, user_id)
+        if not user.society_id:
+            raise APIException(status_code=400, detail="User is not currently attached to any society.", code="NOT_IN_SOCIETY")
+        
+        # Unclaim claimed household transactionally
+        if user.household_id:
+            hh = db.query(Household).filter(Household.id == user.household_id).first()
+            if hh and hh.claimed_by_user_id == user.id:
+                hh.claimed = False
+                hh.claimed_by_user_id = None
+        
+        user.society_id = None
+        user.household_id = None
+        if user.role == "coordinator":
+            user.is_coordinator = False
+            user.role = "resident"
+
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def disable_household_access(db: Session, target_user_id: str, acting_user: User) -> User:
+    try:
+        target = get_user_by_id(db, target_user_id)
+        if target.id == acting_user.id:
+            raise ForbiddenException("You cannot disable your own household access.")
+        
+        # Enforce Primary Resident or Admin permission
+        is_admin_or_owner = acting_user.role in ["owner", "admin"]
+        is_household_primary = acting_user.is_primary_resident and target.household_id == acting_user.household_id
+
+        if not (is_admin_or_owner or is_household_primary):
+            raise ForbiddenException("Only the Primary Resident Lead of this household can manage secondary member access.")
+
+        if target.is_primary_resident:
+            raise ForbiddenException("Primary Resident Lead access cannot be disabled.")
+
+        target.is_household_enabled = False
+        db.commit()
+        db.refresh(target)
+        return target
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def enable_household_access(db: Session, target_user_id: str, acting_user: User) -> User:
+    try:
+        target = get_user_by_id(db, target_user_id)
+        is_admin_or_owner = acting_user.role in ["owner", "admin"]
+        is_household_primary = acting_user.is_primary_resident and target.household_id == acting_user.household_id
+
+        if not (is_admin_or_owner or is_household_primary):
+            raise ForbiddenException("Only the Primary Resident Lead of this household can manage secondary member access.")
+
+        target.is_household_enabled = True
+        db.commit()
+        db.refresh(target)
+        return target
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def deactivate_user(db: Session, target_user_id: str, acting_user: User) -> User:
+    try:
+        target = get_user_by_id(db, target_user_id)
+        if target.id == acting_user.id:
+            raise ForbiddenException("Self-deactivation is prohibited.")
+        if target.role in ["owner", "admin"] and acting_user.role != "owner":
+            raise ForbiddenException("Administrative accounts cannot be deactivated by non-owner roles.")
+        
+        if acting_user.role == "coordinator":
+            if not acting_user.can_deactivate_residents:
+                raise ForbiddenException("Coordinator does not have authorization to deactivate residents.")
+            if target.is_coordinator or target.role != "resident":
+                raise ForbiddenException("Coordinators can only deactivate regular resident accounts.")
+
+        if acting_user.role not in ["owner", "admin", "coordinator"]:
+            raise ForbiddenException("System deactivation is reserved for society administration.")
+
+        target.is_active = False
+        db.commit()
+        db.refresh(target)
+        return target
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def reactivate_user(db: Session, target_user_id: str, acting_user: User) -> User:
+    try:
+        target = get_user_by_id(db, target_user_id)
+        if acting_user.role == "coordinator" and not acting_user.can_deactivate_residents:
+            raise ForbiddenException("Coordinator does not have authorization to reactivate residents.")
+
+        if acting_user.role not in ["owner", "admin", "coordinator"]:
+            raise ForbiddenException("System reactivation is reserved for society administration.")
+
+        target.is_active = True
+        db.commit()
+        db.refresh(target)
+        return target
+    except Exception as e:
+        db.rollback()
+        raise e

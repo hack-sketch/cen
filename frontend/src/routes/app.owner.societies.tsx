@@ -29,8 +29,8 @@ function Page() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [confirmSuspend, setConfirmSuspend] = useState<{ id: string; name: string } | null>(null);
-  const societies = useQuery({ queryKey: ["societies"], queryFn: () => societyService.list() });
-  const list = societies.data?.filter((s) => s.name.toLowerCase().includes(q.toLowerCase())) ?? [];
+  const societies = useQuery({ queryKey: ["societies", q], queryFn: () => societyService.list(q) });
+  const list = societies.data ?? [];
   return (
     <div className="space-y-6 pb-12 animate-page-fade">
       <PageHeader title="Societies Directory" description="Operational catalog of all active and suspended Community Exchange Networks." />

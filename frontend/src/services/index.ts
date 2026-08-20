@@ -6,7 +6,7 @@
 import * as mock from "@/mocks/data";
 import { apiFetch, clearStoredAuth, getStoredUser, setStoredAuth } from "./apiClient";
 
-const delay = <T>(v: T, ms = 200): Promise<T> =>
+const delay = <T>(v: T, ms = 0): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(v), ms));
 
 // In-memory mutable state fallback for offline dev mode
@@ -24,6 +24,7 @@ const state = {
   complaints: [...mock.complaints],
   notices: [...mock.notices],
   chat: [...mock.chatMessages],
+  exchangeBookings: [] as any[],
 };
 
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
@@ -37,15 +38,23 @@ export const authService = {
         body: JSON.stringify({ email, password }),
       });
       if (res && res.user) {
+        if (res.user.isActive === false) {
+          throw new Error("Your account has been deactivated. Please contact your society administration.");
+        }
         const token = res.accessToken || res.access_token;
         setStoredAuth(token, res.user);
         return res.user;
       }
-    } catch (err) {
-      console.warn("[API Notice] login fallback to local state:", err);
+    } catch (err: any) {
+      if (err.message) throw err;
     }
     const user = state.users.find((u) => u.email === email);
-    if (user) setStoredAuth("mock-token-123", user);
+    if (user) {
+      if (user.isActive === false) {
+        throw new Error("Your account has been deactivated. Please contact your society administration.");
+      }
+      setStoredAuth("mock-token-123", user);
+    }
     return delay(user ?? null);
   },
   signup: async (name: string, email: string, password: string = "password123") => {
@@ -84,29 +93,41 @@ export const authService = {
   getUserById: async (id: string) => {
     try {
       const res = await apiFetch<any>("/users/me");
-      if (res) return res;
-    } catch (err) {
-      try {
-        const res2 = await apiFetch<any>(`/users/${id}`);
-        if (res2) return res2;
-      } catch (e) {
-        console.warn("[API Notice] getUserById fallback:", e);
+      if (res) {
+        if (res.isActive === false) {
+          throw new Error("Your account has been deactivated. Please contact your society administration.");
+        }
+        return res;
       }
+    } catch (err: any) {
+      if (err.message && err.message.includes("deactivated")) throw err;
     }
-    return delay(state.users.find((u) => u.id === id) ?? null);
+    const u = state.users.find((u) => u.id === id);
+    if (u && u.isActive === false) {
+      throw new Error("Your account has been deactivated. Please contact your society administration.");
+    }
+    return delay(u ?? null);
   },
 };
 
 // ---------------- Societies ----------------
 export const societyService = {
-  list: async () => {
+  list: async (search?: string) => {
     try {
-      const res = await apiFetch<any[]>("/societies");
+      const url = search ? `/societies?name=${encodeURIComponent(search)}` : "/societies";
+      const res = await apiFetch<any[]>(url);
       if (Array.isArray(res)) return res;
     } catch (err) {
       console.warn("[API Notice] list societies fallback:", err);
     }
-    return delay(state.societies);
+    let list = state.societies;
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (s) => s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q)
+      );
+    }
+    return delay(list);
   },
   getById: async (id: string) => {
     try {
@@ -129,6 +150,7 @@ export const societyService = {
           applicantContact: a.applicantContact,
           reason: a.reason || "Request to create society network",
           residentCount: Number(a.residentCount) || Number(a.estimatedCap) || 100,
+          membersPerHousehold: Number(a.membersPerHousehold) || 4,
           initialCredits: Number(a.initialCredits) || 10,
         }),
       });
@@ -139,6 +161,7 @@ export const societyService = {
     const app: mock.SocietyApplication = {
       ...a,
       id: uid("app"),
+      membersPerHousehold: Number(a.membersPerHousehold) || 4,
       status: "pending",
       submittedAt: new Date().toISOString().slice(0, 10),
     };
@@ -154,11 +177,11 @@ export const societyService = {
     }
     return delay(state.applications);
   },
-  approveApplication: async (id: string, capacity: number, initialCredits: number = 10) => {
+  approveApplication: async (id: string, capacity: number, initialCredits: number = 10, membersPerHousehold?: number) => {
     try {
       const res = await apiFetch<any>(`/societies/applications/${id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ capacity, initialCredits }),
+        body: JSON.stringify({ capacity, initialCredits, membersPerHousehold }),
       });
       if (res) return true;
     } catch (err) {
@@ -183,6 +206,7 @@ export const societyService = {
         longitude: 77.59,
         adminId: adminId,
         capacity: capacity,
+        membersPerHousehold: membersPerHousehold || a.membersPerHousehold || 4,
         initialCredits: initialCredits,
         householdRangeStart: 1,
         householdRangeEnd: capacity,
@@ -397,16 +421,40 @@ export const joinRequestService = {
     } catch (err) {
       console.warn("[API Notice] approve joinRequest fallback:", err);
     }
-    const r = state.joinRequests.find((x) => x.id === id);
+    const r = state.joinRequests.find((x) => x.id === id) as any;
     if (r) {
       r.status = "approved";
-      const u = state.users.find((x) => x.id === r.userId);
+      let u = state.users.find((x) => x.id === r.userId || x.name === r.userName);
       const soc = state.societies.find((s) => s.id === r.societyId);
       const grantCredits = soc?.initialCredits ?? 10;
       if (u) {
         u.societyId = r.societyId;
         u.householdId = r.householdId;
         u.creditBalance = (u.creditBalance || 0) + grantCredits;
+      } else {
+        u = {
+          id: r.userId || uid("u"),
+          name: r.userName,
+          email: r.userEmail || r.email || `${r.userName.toLowerCase().replace(/\s+/g, "")}@cen.app`,
+          role: "resident",
+          societyId: r.societyId,
+          householdId: r.householdId,
+          creditBalance: grantCredits,
+          joinedDate: new Date().toISOString().slice(0, 10),
+          idProofUploaded: true,
+          isCoordinator: false,
+          hasCompletedSurvey: true,
+          isActive: true,
+        };
+        state.users.push(u);
+      }
+      const hh = state.households.find((h) => h.id === r.householdId);
+      if (hh) {
+        hh.occupantsCount = (hh.occupantsCount || 0) + 1;
+        if (!hh.claimed) {
+          hh.claimed = true;
+          hh.claimedByUserId = u.id;
+        }
       }
     }
     return delay(true);
@@ -465,9 +513,12 @@ export const userService = {
     }
     return delay(state.users.filter((u) => u.societyId === societyId && u.isCoordinator));
   },
-  promote: async (userId: string) => {
+  promote: async (userId: string, canManageOnboarding: boolean = true, canDeactivateResidents: boolean = false) => {
     try {
-      await apiFetch<any>(`/users/${userId}/promote`, { method: "POST" });
+      await apiFetch<any>(`/users/${userId}/promote`, {
+        method: "POST",
+        body: JSON.stringify({ canManageOnboarding, canDeactivateResidents }),
+      });
       return true;
     } catch (err) {
       console.warn("[API Notice] promote user fallback:", err);
@@ -476,6 +527,25 @@ export const userService = {
     if (u) {
       u.isCoordinator = true;
       u.role = "coordinator";
+      u.canManageOnboarding = canManageOnboarding;
+      u.canDeactivateResidents = canDeactivateResidents;
+    }
+    return delay(true);
+  },
+  updateCoordinatorPermissions: async (userId: string, canManageOnboarding: boolean, canDeactivateResidents: boolean) => {
+    try {
+      await apiFetch<any>(`/users/${userId}/coordinator-permissions`, {
+        method: "PATCH",
+        body: JSON.stringify({ canManageOnboarding, canDeactivateResidents }),
+      });
+      return true;
+    } catch (err) {
+      console.warn("[API Notice] updateCoordinatorPermissions fallback:", err);
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) {
+      u.canManageOnboarding = canManageOnboarding;
+      u.canDeactivateResidents = canDeactivateResidents;
     }
     return delay(true);
   },
@@ -490,7 +560,62 @@ export const userService = {
     if (u) {
       u.isCoordinator = false;
       u.role = "resident";
+      u.canManageOnboarding = true;
+      u.canDeactivateResidents = false;
     }
+    return delay(true);
+  },
+  leaveSociety: async () => {
+    try {
+      const res = await apiFetch<any>("/users/me/leave-society", { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    return delay(true);
+  },
+  disableHouseholdAccess: async (userId: string) => {
+    try {
+      await apiFetch<any>(`/users/${userId}/disable-household-access`, { method: "POST" });
+      return true;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) u.isHouseholdEnabled = false;
+    return delay(true);
+  },
+  enableHouseholdAccess: async (userId: string) => {
+    try {
+      await apiFetch<any>(`/users/${userId}/enable-household-access`, { method: "POST" });
+      return true;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) u.isHouseholdEnabled = true;
+    return delay(true);
+  },
+  deactivateUser: async (userId: string) => {
+    try {
+      await apiFetch<any>(`/users/${userId}/deactivate`, { method: "POST" });
+      return true;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) u.isActive = false;
+    return delay(true);
+  },
+  reactivateUser: async (userId: string) => {
+    try {
+      await apiFetch<any>(`/users/${userId}/reactivate`, { method: "POST" });
+      return true;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const u = state.users.find((x) => x.id === userId);
+    if (u) u.isActive = true;
     return delay(true);
   },
   updateProfile: async (userId: string, data: { name?: string; email?: string; societyName?: string }) => {
@@ -613,16 +738,30 @@ export const skillService = {
     } catch (err: any) {
       if (err.message) throw err;
     }
-    const s = state.skills.find((x) => x.id === skillId);
-    if (s) {
-      const req = state.users.find((u) => u.id === requesterId);
-      const prov = state.users.find((u) => u.id === s.providerId);
-      if (req && prov && req.creditBalance >= s.credits) {
-        req.creditBalance -= s.credits;
-        prov.creditBalance += s.credits;
-      }
-    }
     return delay(true);
+  },
+  delete: async (id: string) => {
+    try {
+      await apiFetch<any>(`/marketplace/skills/${id}`, { method: "DELETE" });
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const s = state.skills.find((x) => x.id === id);
+    if (s) (s as any).status = "deleted";
+    return delay(true);
+  },
+  relist: async (id: string) => {
+    try {
+      const res = await apiFetch<any>(`/marketplace/skills/${id}/relist`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const s = state.skills.find((x) => x.id === id);
+    if (s) {
+      s.status = "pending";
+    }
+    return delay(s);
   },
 };
 
@@ -703,8 +842,59 @@ export const resourceService = {
     } catch (err: any) {
       if (err.message) throw err;
     }
-    const r = state.resources.find((x) => x.id === resourceId);
-    if (r && r.available) {
+    return delay(true);
+  },
+  toggleAvailability: async (id: string, available: boolean) => {
+    try {
+      const res = await apiFetch<any>(`/marketplace/resources/${id}/availability?available=${available}`, { method: "PATCH" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const r = state.resources.find((x) => x.id === id);
+    if (r) {
+      r.available = available;
+      if (available) r.status = "approved";
+    }
+    return delay(r);
+  },
+  relist: async (id: string) => {
+    try {
+      const res = await apiFetch<any>(`/marketplace/resources/${id}/relist`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const r = state.resources.find((x) => x.id === id);
+    if (r) {
+      r.status = "pending";
+      r.available = true;
+    }
+    return delay(r);
+  },
+  markReturned: async (id: string) => {
+    try {
+      const res = await apiFetch<any>(`/marketplace/resources/${id}/return`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const r = state.resources.find((x) => x.id === id);
+    if (r) {
+      r.available = true;
+      r.status = "returned";
+    }
+    return delay(r);
+  },
+  delete: async (id: string) => {
+    try {
+      await apiFetch<any>(`/marketplace/resources/${id}`, { method: "DELETE" });
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const r = state.resources.find((x) => x.id === id);
+    if (r) {
+      (r as any).status = "deleted";
       r.available = false;
     }
     return delay(true);
@@ -778,11 +968,19 @@ export const eventService = {
   },
   requestVolunteer: async (eventId: string, residentId: string, residentName: string, eventTitle: string) => {
     try {
-      const res = await apiFetch<any>(`/events/${eventId}/volunteer-requests`, { method: "POST" });
+      const res = await apiFetch<any>(`/events/${eventId}/volunteer`, { method: "POST" });
       if (res) return res;
     } catch (err) {
       console.warn("[API Notice] requestVolunteer fallback:", err);
     }
+    const existing = state.volunteerRequests.find((v) => v.eventId === eventId && v.residentId === residentId);
+    if (existing) {
+      existing.type = "self-requested";
+      existing.status = "pending";
+      existing.leaveReason = undefined;
+      return delay(existing);
+    }
+
     const v: mock.VolunteerRequest = {
       id: uid("vr"),
       eventId,
@@ -797,11 +995,22 @@ export const eventService = {
   },
   inviteVolunteer: async (eventId: string, residentId: string, residentName: string, eventTitle: string) => {
     try {
-      const res = await apiFetch<any>(`/events/${eventId}/invite?resident_id=${residentId}`, { method: "POST" });
+      const res = await apiFetch<any>(`/events/${eventId}/invite`, {
+        method: "POST",
+        body: JSON.stringify({ resident_id: residentId }),
+      });
       if (res) return res;
     } catch (err) {
       console.warn("[API Notice] inviteVolunteer fallback:", err);
     }
+    const existing = state.volunteerRequests.find((v) => v.eventId === eventId && v.residentId === residentId);
+    if (existing) {
+      existing.type = "coordinator-invited";
+      existing.status = "pending";
+      existing.leaveReason = undefined;
+      return delay(existing);
+    }
+
     const v: mock.VolunteerRequest = {
       id: uid("vr"),
       eventId,
@@ -815,35 +1024,65 @@ export const eventService = {
     return delay(v);
   },
   approveVolunteer: async (id: string) => {
+    try {
+      await apiFetch<any>(`/events/volunteer-requests/${id}/approve`, { method: "POST" });
+    } catch (err) {
+      console.warn("[API Notice] approveVolunteer fallback:", err);
+    }
     const v = state.volunteerRequests.find((x) => x.id === id);
     if (v) {
-      try {
-        await apiFetch<any>(`/events/${v.eventId}/volunteer-requests/${id}/approve`, { method: "POST" });
-      } catch (err) {
-        console.warn("[API Notice] approveVolunteer fallback:", err);
-      }
       v.status = "approved";
+      const ev = state.events.find((e) => e.id === v.eventId);
+      if (ev && !ev.volunteers.includes(v.residentId)) {
+        ev.volunteers.push(v.residentId);
+      }
     }
     return delay(true);
   },
   rejectVolunteer: async (id: string) => {
-    const v = state.volunteerRequests.find((x) => x.id === id);
-    if (v) {
-      try {
-        await apiFetch<any>(`/events/${v.eventId}/volunteer-requests/${id}/reject`, { method: "POST" });
-      } catch (err) {
-        console.warn("[API Notice] rejectVolunteer fallback:", err);
-      }
-      v.status = "rejected";
+    try {
+      await apiFetch<any>(`/events/volunteer-requests/${id}/reject`, { method: "POST" });
+    } catch (err) {
+      console.warn("[API Notice] rejectVolunteer fallback:", err);
     }
+    const v = state.volunteerRequests.find((x) => x.id === id);
+    if (v) v.status = "rejected";
+    return delay(true);
+  },
+  cancelInvite: async (id: string) => {
+    try {
+      await apiFetch<any>(`/events/volunteer-requests/${id}/cancel`, { method: "POST" });
+    } catch (err) {
+      console.warn("[API Notice] cancelInvite fallback:", err);
+    }
+    state.volunteerRequests = state.volunteerRequests.filter((v) => v.id !== id);
     return delay(true);
   },
   leave: async (eventId: string, residentId: string, reason: string) => {
     try {
-      await apiFetch<any>(`/events/${eventId}/leave?leave_reason=${encodeURIComponent(reason)}`, { method: "POST" });
-      return true;
+      await apiFetch<any>(`/events/${eventId}/leave`, {
+        method: "POST",
+        body: JSON.stringify({ leaveReason: reason }),
+      });
     } catch (err) {
-      console.warn("[API Notice] leave event fallback:", err);
+      console.warn("[API Notice] leave event API failed, attempting fallback:", err);
+      const v = state.volunteerRequests.find((x) => x.eventId === eventId && x.residentId === residentId);
+      if (v) {
+        try {
+          await apiFetch<any>(`/events/volunteer-requests/${v.id}/withdraw`, {
+            method: "POST",
+            body: JSON.stringify({ leaveReason: reason }),
+          });
+        } catch (e2) {
+          console.warn("[API Notice] leave event fallback failed:", e2);
+        }
+      }
+    }
+
+    const vMock = state.volunteerRequests.find((x) => x.eventId === eventId && x.residentId === residentId);
+    if (vMock) {
+      vMock.status = "left";
+      vMock.leaveReason = reason;
     }
     const ev = state.events.find((e) => e.id === eventId);
     if (ev) ev.volunteers = ev.volunteers.filter((uid) => uid !== residentId);
@@ -851,8 +1090,154 @@ export const eventService = {
   },
 };
 
+// ---------------- Exchange Bookings ----------------
+export interface ExchangeBooking {
+  id: string;
+  itemType: "skill" | "resource";
+  itemId: string;
+  itemTitle: string;
+  ownerId: string;
+  ownerName: string;
+  buyerId: string;
+  buyerName: string;
+  credits: number;
+  status: "pending_owner_approval" | "approved" | "declined";
+  createdAt: string;
+  societyId: string;
+}
+
+export const bookingService = {
+  listForUser: async () => {
+    try {
+      const res = await apiFetch<ExchangeBooking[]>("/marketplace/bookings");
+      if (Array.isArray(res)) return res;
+    } catch (err) {
+      console.warn("[API Notice] listForUser bookings fallback:", err);
+    }
+    return delay(state.exchangeBookings);
+  },
+  requestSkill: async (skillId: string, buyerId: string) => {
+    try {
+      const res = await apiFetch<ExchangeBooking>(`/marketplace/skills/${skillId}/book`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const skill = state.skills.find((s) => s.id === skillId);
+    const buyer = state.users.find((u) => u.id === buyerId);
+    if (!skill || !buyer) throw new Error("Skill or buyer not found.");
+    if (buyer.creditBalance < skill.credits) throw new Error(`Insufficient credits. You need at least ${skill.credits} credits.`);
+    
+    const newBooking: ExchangeBooking = {
+      id: uid("eb"),
+      itemType: "skill",
+      itemId: skill.id,
+      itemTitle: skill.title,
+      ownerId: skill.providerId,
+      ownerName: skill.providerName,
+      buyerId: buyer.id,
+      buyerName: buyer.name,
+      credits: skill.credits,
+      status: "pending_owner_approval",
+      createdAt: new Date().toISOString().split("T")[0],
+      societyId: buyer.societyId || skill.societyId,
+    };
+    state.exchangeBookings.push(newBooking);
+    return delay(newBooking);
+  },
+  requestResource: async (resourceId: string, buyerId: string) => {
+    try {
+      const res = await apiFetch<ExchangeBooking>(`/marketplace/resources/${resourceId}/book`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const resItem = state.resources.find((r) => r.id === resourceId);
+    const buyer = state.users.find((u) => u.id === buyerId);
+    if (!resItem || !buyer) throw new Error("Resource or buyer not found.");
+    if (buyer.creditBalance < resItem.credits) throw new Error(`Insufficient credits. You need at least ${resItem.credits} credits.`);
+    
+    const newBooking: ExchangeBooking = {
+      id: uid("eb"),
+      itemType: "resource",
+      itemId: resItem.id,
+      itemTitle: resItem.name,
+      ownerId: resItem.ownerId,
+      ownerName: resItem.ownerName,
+      buyerId: buyer.id,
+      buyerName: buyer.name,
+      credits: resItem.credits,
+      status: "pending_owner_approval",
+      createdAt: new Date().toISOString().split("T")[0],
+      societyId: buyer.societyId || resItem.societyId,
+    };
+    state.exchangeBookings.push(newBooking);
+    return delay(newBooking);
+  },
+  approveBooking: async (bookingId: string) => {
+    try {
+      const res = await apiFetch<ExchangeBooking>(`/marketplace/bookings/${bookingId}/approve`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const b = state.exchangeBookings.find((x) => x.id === bookingId);
+    if (b) {
+      const buyer = state.users.find((u) => u.id === b.buyerId);
+      const owner = state.users.find((u) => u.id === b.ownerId);
+      if (buyer && owner && buyer.creditBalance >= b.credits) {
+        buyer.creditBalance -= b.credits;
+        owner.creditBalance += b.credits;
+      }
+      b.status = "approved";
+      if (b.itemType === "resource") {
+        const r = state.resources.find((item) => item.id === b.itemId);
+        if (r) r.available = false;
+      }
+      // Auto-decline / remove all other pending requests for this exact same item
+      state.exchangeBookings.forEach((other) => {
+        if (other.itemId === b.itemId && other.id !== b.id && other.status === "pending_owner_approval") {
+          other.status = "declined";
+        }
+      });
+    }
+    return delay(b);
+  },
+  declineBooking: async (bookingId: string) => {
+    try {
+      const res = await apiFetch<ExchangeBooking>(`/marketplace/bookings/${bookingId}/decline`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const b = state.exchangeBookings.find((x) => x.id === bookingId);
+    if (b) b.status = "declined";
+    return delay(b);
+  },
+  cancelBooking: async (bookingId: string) => {
+    try {
+      const res = await apiFetch<ExchangeBooking>(`/marketplace/bookings/${bookingId}/cancel`, { method: "POST" });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    const b = state.exchangeBookings.find((x) => x.id === bookingId);
+    if (b) b.status = "cancelled";
+    return delay(b);
+  },
+};
+
 // ---------------- Complaints ----------------
 export const complaintService = {
+  list: async (societyId: string) => {
+    try {
+      const res = await apiFetch<any[]>(`/complaints?society_id=${societyId}`);
+      if (Array.isArray(res)) return res;
+    } catch (err) {
+      console.warn("[API Notice] list complaints fallback:", err);
+    }
+    return delay(state.complaints.filter((c) => c.societyId === societyId && !c.isAgainstCoordinator));
+  },
   listSociety: async (societyId: string) => {
     try {
       const res = await apiFetch<any[]>(`/complaints?society_id=${societyId}`);
@@ -871,24 +1256,33 @@ export const complaintService = {
     }
     return delay(state.complaints.filter((c) => c.societyId === societyId && c.isAgainstCoordinator));
   },
-  listForUser: async (userId: string) => {
+  listForUser: async (societyId: string, userId?: string) => {
+    try {
+      const res = await apiFetch<any[]>(`/complaints?society_id=${societyId}`);
+      if (Array.isArray(res)) return res;
+    } catch (err) {
+      console.warn("[API Notice] listForUser complaints fallback:", err);
+    }
     return delay(
       state.complaints.filter(
-        (c) => !c.isAgainstCoordinator && (c.filedById === userId || c.involvedUserIds.includes(userId)),
+        (c) => !c.isAgainstCoordinator && (!userId || c.filedById === userId || c.involvedUserIds?.includes(userId)),
       ),
     );
   },
-  file: async (c: Omit<mock.Complaint, "id" | "status" | "createdAt" | "isAgainstCoordinator">) => {
+  file: async (c: any) => {
     try {
+      const isAnon = c.isAnonymous || c.filedByName === "Anonymous";
       const res = await apiFetch<any>("/complaints", {
         method: "POST",
         body: JSON.stringify({
-          title: c.title,
-          category: c.category,
+          title: c.subject || c.title || "Complaint",
+          category: c.category || "General",
           description: c.description,
           priority: c.priority,
           targetCoordinatorId: c.targetCoordinatorId,
-          isAgainstCoordinator: false,
+          isPrivate: false,
+          isAnonymous: isAnon,
+          filedByName: isAnon ? "Anonymous" : c.filedByName,
         }),
       });
       if (res) return res;
@@ -901,23 +1295,25 @@ export const complaintService = {
       status: "open",
       createdAt: new Date().toISOString().slice(0, 10),
       isAgainstCoordinator: false,
+      filedByName: c.isAnonymous ? "Anonymous" : c.filedByName,
     };
     state.complaints.push(nc);
     return delay(nc);
   },
-  fileAgainstCoordinator: async (
-    c: Omit<mock.Complaint, "id" | "status" | "createdAt" | "isAgainstCoordinator" | "involvedUserIds">,
-  ) => {
+  fileAgainstCoordinator: async (c: any) => {
     try {
+      const isAnon = c.isAnonymous || c.filedByName === "Anonymous";
       const res = await apiFetch<any>("/complaints", {
         method: "POST",
         body: JSON.stringify({
-          title: c.title,
-          category: c.category,
+          title: c.subject || c.title || "Coordinator Conduct Complaint",
+          category: c.category || "Coordinator Conduct",
           description: c.description,
           priority: c.priority,
           targetCoordinatorId: c.targetCoordinatorId,
-          isAgainstCoordinator: true,
+          isPrivate: true,
+          isAnonymous: isAnon,
+          filedByName: isAnon ? "Anonymous" : c.filedByName,
         }),
       });
       if (res) return res;
@@ -930,21 +1326,111 @@ export const complaintService = {
       status: "open",
       createdAt: new Date().toISOString().slice(0, 10),
       isAgainstCoordinator: true,
+      filedByName: c.isAnonymous ? "Anonymous" : c.filedByName,
       involvedUserIds: [],
     };
     state.complaints.push(nc);
     return delay(nc);
   },
-  takeAction: async (id: string, action: "in-review" | "resolved" | "dismissed") => {
+  takeAction: async (id: string, action: "in-review" | "resolved" | "dismissed", notes?: string) => {
     try {
-      await apiFetch<any>(`/complaints/${id}/status?new_status=${action}`, { method: "PUT" });
-      return true;
+      const res = await apiFetch<any>(`/complaints/${id}/action`, {
+        method: "POST",
+        body: JSON.stringify({
+          status: action === "in-review" ? "under_review" : action,
+          notes: notes,
+          resolutionNotes: notes,
+        }),
+      });
+      if (res) return res;
     } catch (err) {
       console.warn("[API Notice] takeAction complaint fallback:", err);
     }
     const c = state.complaints.find((x) => x.id === id);
-    if (c) c.status = action;
+    if (c) {
+      c.status = action;
+      if (notes) (c as any).resolutionNotes = notes;
+    }
     return delay(true);
+  },
+  delete: async (id: string) => {
+    try {
+      await apiFetch<any>(`/complaints/${id}`, { method: "DELETE" });
+      return true;
+    } catch (err) {
+      console.warn("[API Notice] delete complaint fallback:", err);
+    }
+    state.complaints = state.complaints.filter((x) => x.id !== id);
+    return delay(true);
+  },
+};
+
+// ---------------- Disputes ----------------
+export const disputeService = {
+  list: async (societyId: string) => {
+    try {
+      const res = await apiFetch<any[]>(`/disputes?society_id=${societyId}`);
+      if (Array.isArray(res)) return res;
+    } catch (err) {
+      console.warn("[API Notice] list disputes fallback:", err);
+    }
+    return delay([]);
+  },
+  file: async (d: {
+    bookingId: string;
+    itemTitle: string;
+    itemType: string;
+    buyerId: string;
+    buyerName: string;
+    ownerId: string;
+    ownerName: string;
+    reason: string;
+  }) => {
+    try {
+      const res = await apiFetch<any>("/disputes", {
+        method: "POST",
+        body: JSON.stringify(d),
+      });
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] file dispute fallback:", err);
+      throw err;
+    }
+  },
+  updateNote: async (disputeId: string, note: string) => {
+    try {
+      const res = await apiFetch<any>(`/disputes/${disputeId}/note`, {
+        method: "PUT",
+        body: JSON.stringify({ note }),
+      });
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] updateNote dispute fallback:", err);
+      throw err;
+    }
+  },
+  updateStatus: async (disputeId: string, status: string, resolutionNotes?: string) => {
+    try {
+      const res = await apiFetch<any>(`/disputes/${disputeId}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status, resolutionNotes }),
+      });
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] updateStatus dispute fallback:", err);
+      throw err;
+    }
+  },
+  delete: async (disputeId: string) => {
+    try {
+      await apiFetch<any>(`/disputes/${disputeId}`, {
+        method: "DELETE",
+      });
+      return true;
+    } catch (err) {
+      console.warn("[API Notice] delete dispute fallback:", err);
+      throw err;
+    }
   },
 };
 
@@ -971,8 +1457,9 @@ export const noticeService = {
         }),
       });
       if (res) return res;
-    } catch (err) {
-      console.warn("[API Notice] post notice fallback:", err);
+    } catch (err: any) {
+      console.warn("[API Notice] post notice error:", err);
+      if (err.message) throw err;
     }
     const nn: mock.Notice = { ...n, id: uid("n"), date: new Date().toISOString().slice(0, 10) };
     state.notices.unshift(nn);
@@ -990,8 +1477,16 @@ export const noticeService = {
     return delay(true);
   },
   hasPostedToday: async (userId: string) => {
+    try {
+      const res = await apiFetch<any>("/notices/posted-today");
+      if (res && typeof res.hasPostedToday === "boolean") {
+        return res.hasPostedToday;
+      }
+    } catch (err) {
+      console.warn("[API Notice] hasPostedToday fallback:", err);
+    }
     const today = new Date().toISOString().slice(0, 10);
-    return delay(state.notices.some((n) => n.postedById === userId && n.date === today));
+    return delay(state.notices.some((n) => (n.postedById === userId || (n as any).postedByUserId === userId) && n.date === today));
   },
 };
 
@@ -1032,6 +1527,49 @@ export const chatService = {
     };
     state.chat.push(m);
     return delay(m);
+  },
+};
+
+// ---------------- Analytics ----------------
+export const analyticsService = {
+  getSocietyPerformance: async (societyId: string = "soc-demo") => {
+    try {
+      const res = await apiFetch<any>(`/analytics/society/${societyId}`);
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] getSocietyPerformance fallback:", err);
+    }
+    return delay({
+      societyId,
+      societyName: "Green Oasis Society",
+      performanceScore: 98,
+      coordinatorCount: 2,
+      totalResidents: 15,
+      activeSkills: 8,
+      activeResources: 6,
+      totalEvents: 4,
+      resolvedComplaintsPct: 92.5,
+    });
+  },
+  getOwnerAnalytics: async () => {
+    try {
+      const res = await apiFetch<any>("/analytics/owner");
+      if (res) return res;
+    } catch (err) {
+      console.warn("[API Notice] getOwnerAnalytics fallback:", err);
+    }
+    return delay({
+      totalSocieties: 6,
+      activeSocieties: 6,
+      pendingApplications: 2,
+      totalResidents: 5,
+      totalTransactions: 4,
+      totalCreditsCirculating: 205,
+      totalSkills: 6,
+      totalResources: 6,
+      totalEvents: 3,
+      totalComplaints: 3,
+    });
   },
 };
 

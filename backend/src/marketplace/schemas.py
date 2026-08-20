@@ -73,3 +73,24 @@ class ResourceResponse(BaseModel):
         populate_by_name=True,
         from_attributes=True,
     )
+
+
+class ExchangeBookingResponse(BaseModel):
+    id: str
+    item_type: str
+    item_id: str
+    item_title: str
+    owner_id: str
+    owner_name: str
+    buyer_id: str
+    buyer_name: str
+    credits: int
+    status: str
+    created_at: str
+    society_id: str
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )

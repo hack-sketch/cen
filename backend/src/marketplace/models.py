@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from sqlalchemy import Column, String, Integer, Boolean
 from src.database import Base
 
@@ -9,6 +10,10 @@ def generate_sk_id():
 
 def generate_r_id():
     return f"r-{uuid.uuid4().hex[:8]}"
+
+
+def generate_eb_id():
+    return f"eb-{uuid.uuid4().hex[:8]}"
 
 
 class Skill(Base):
@@ -38,4 +43,21 @@ class Resource(Base):
     credits = Column(Integer, nullable=False, default=1)
     status = Column(String, nullable=False, default="pending")  # pending | approved | rejected
     description = Column(String, nullable=False)
+    society_id = Column(String, nullable=False, index=True)
+
+
+class ExchangeBooking(Base):
+    __tablename__ = "exchange_bookings"
+
+    id = Column(String, primary_key=True, default=generate_eb_id, index=True)
+    item_type = Column(String, nullable=False)  # skill | resource
+    item_id = Column(String, nullable=False, index=True)
+    item_title = Column(String, nullable=False)
+    owner_id = Column(String, nullable=False, index=True)
+    owner_name = Column(String, nullable=False)
+    buyer_id = Column(String, nullable=False, index=True)
+    buyer_name = Column(String, nullable=False)
+    credits = Column(Integer, nullable=False)
+    status = Column(String, nullable=False, default="pending_owner_approval")  # pending_owner_approval | approved | declined
+    created_at = Column(String, nullable=False, default=lambda: date.today().isoformat())
     society_id = Column(String, nullable=False, index=True)

@@ -11,14 +11,32 @@ import { useState, useEffect, useRef } from "react";
 import { Bot, Send, User as UserIcon, Search, Sparkles, MessagesSquare } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 
-export const Route = createFileRoute("/app/chat")({ component: Page });
+type ChatSearch = {
+  peerId?: string;
+};
+
+export const Route = createFileRoute("/app/chat")({
+  validateSearch: (search: Record<string, unknown>): ChatSearch => {
+    return {
+      peerId: typeof search.peerId === "string" ? search.peerId : undefined,
+    };
+  },
+  component: Page,
+});
 
 function Page() {
   const { user } = useAuth();
+  const search = Route.useSearch();
   const sid = user!.societyId!;
   const contacts = useQuery({ queryKey: ["allRes", sid], queryFn: () => userService.listBySociety(sid) });
-  const [active, setActive] = useState<string>("chatbot");
+  const [active, setActive] = useState<string>(search.peerId || "chatbot");
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (search.peerId) {
+      setActive(search.peerId);
+    }
+  }, [search.peerId]);
   
   const list = contacts.data?.filter((u) => u.id !== user!.id) ?? [];
   const filteredList = list.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));

@@ -52,7 +52,13 @@ function Page() {
                 </div>
                 {a.status === "pending" && (
                   <div className="flex gap-2 flex-shrink-0">
-                    <ApproveDialog id={a.id} initialCapacity={a.residentCount} suggestedInitialCredits={a.initialCredits} onDone={() => qc.invalidateQueries({ queryKey: ["apps"] })} />
+                    <ApproveDialog
+                      id={a.id}
+                      initialCapacity={a.residentCount}
+                      suggestedMembersPerHousehold={a.membersPerHousehold}
+                      suggestedInitialCredits={a.initialCredits}
+                      onDone={() => qc.invalidateQueries({ queryKey: ["apps"] })}
+                    />
                     <Button variant="outline" className="h-[36px] text-xs font-semibold px-4 active:scale-98 transition-all border-line-strong hover:bg-panel cursor-pointer" onClick={() => setConfirmReject({ id: a.id, societyName: a.societyName })}>Reject</Button>
                   </div>
                 )}
@@ -70,9 +76,9 @@ function Page() {
                   <p className="text-xs text-on-surface-variant mt-0.5">{a.type}</p>
                 </div>
                 <div>
-                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Requested Slots</span>
-                  <p className="text-sm font-bold text-deep-forest mt-1">{a.residentCount ?? "100"}</p>
-                  <p className="text-xs text-on-surface-variant mt-0.5">Household capacity</p>
+                  <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Slots & Household Limit</span>
+                  <p className="text-sm font-bold text-deep-forest mt-1">{a.residentCount ?? "100"} Total Units</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">{a.membersPerHousehold ?? 4} Max Residents/Slot</p>
                 </div>
                 <div>
                   <span className="text-xs uppercase font-bold tracking-wider text-on-surface-variant/80">Initial Credits</span>
@@ -127,24 +133,28 @@ function Page() {
 function ApproveDialog({
   id,
   initialCapacity = 200,
+  suggestedMembersPerHousehold = 4,
   suggestedInitialCredits = 10,
   onDone,
 }: {
   id: string;
   initialCapacity?: number;
+  suggestedMembersPerHousehold?: number;
   suggestedInitialCredits?: number;
   onDone: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [cap, setCap] = useState<number | string>(initialCapacity);
+  const [mph, setMph] = useState<number | string>(suggestedMembersPerHousehold);
   const [initCredits, setInitCredits] = useState<number | string>(suggestedInitialCredits);
 
   useEffect(() => {
     if (open) {
       setCap(initialCapacity);
+      setMph(suggestedMembersPerHousehold);
       setInitCredits(suggestedInitialCredits);
     }
-  }, [open, initialCapacity, suggestedInitialCredits]);
+  }, [open, initialCapacity, suggestedMembersPerHousehold, suggestedInitialCredits]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -157,9 +167,15 @@ function ApproveDialog({
           <span className="text-xs text-on-surface-variant">Initialize community parameters including member slot capacity and initial credits per household.</span>
         </DialogHeader>
         <div className="space-y-4 pt-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Maximum member capacity (Slots)</Label>
-            <Input type="number" min={1} value={cap} onChange={(e) => setCap(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Total Slots (Units)</Label>
+              <Input type="number" min={1} value={cap} onChange={(e) => setCap(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Members / Household</Label>
+              <Input type="number" min={1} max={20} value={mph} onChange={(e) => setMph(e.target.value === "" ? "" : Number(e.target.value))} className="border-line-strong focus:ring-1 focus:ring-deep-forest/20 text-xs h-10 rounded-lg" />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs uppercase font-bold tracking-wider text-on-surface-variant">Initial credits per household / slot</Label>
@@ -167,8 +183,8 @@ function ApproveDialog({
             <p className="text-[10px] text-on-surface-variant">Every household approved to join this society will automatically receive these credits.</p>
           </div>
           <Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer mt-2 active:scale-98 transition-all" onClick={async () => {
-            await societyService.approveApplication(id, Number(cap) || 200, Number(initCredits) || 10);
-            toast.success("Society approved and activated with configured initial credits");
+            await societyService.approveApplication(id, Number(cap) || 200, Number(initCredits) || 10, Number(mph) || 4);
+            toast.success("Society approved and activated with configured household limits");
             setOpen(false);
             onDone();
           }}>Confirm approval</Button>

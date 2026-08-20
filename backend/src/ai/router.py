@@ -12,11 +12,9 @@ from src.ai.schemas import (
     ChatbotResponsePayload,
     MarketplaceMatchPayload,
     MatchItemResult,
-    NearbyQuery,
-    NearbySocietyResult,
-    VerifyIdProofPayload,
-    VerifyIdProofResult,
     VolunteerSuggestionResult,
+    SummarizeNoticePayload,
+    SummarizeNoticeResult,
 )
 
 from src.database import get_db
@@ -24,19 +22,6 @@ from src.dependencies import get_current_user_from_token, require_roles
 from src.users.models import User
 
 router = APIRouter(prefix="/ai", tags=["AI & Smart Assistant"])
-
-
-@router.post("/verify-id-proof", response_model=VerifyIdProofResult)
-def verify_id_proof(
-    payload: VerifyIdProofPayload,
-    current_user: User = Depends(get_current_user_from_token),
-):
-    return ai_service.verify_id_proof(payload.image_url, payload.user_name)
-
-
-@router.post("/find-nearby-societies", response_model=List[NearbySocietyResult])
-def find_nearby_societies(payload: NearbyQuery, db: Session = Depends(get_db)):
-    return ai_service.find_nearby_societies(db, payload.address)
 
 
 @router.post("/chatbot", response_model=ChatbotResponsePayload)
@@ -71,3 +56,9 @@ def suggest_volunteers(
     current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
 ):
     return ai_service.suggest_volunteers(db, event_id)
+
+
+@router.post("/summarize-notice", response_model=SummarizeNoticeResult)
+def summarize_notice(payload: SummarizeNoticePayload):
+    return ai_service.summarize_notice(payload.content)
+

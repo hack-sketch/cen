@@ -35,6 +35,15 @@ def create_event(
     return ev_service.create_event(db, current_user, event_in)
 
 
+@router.get("/volunteers", response_model=List[VolunteerRequestResponse])
+def list_society_volunteer_requests(
+    society_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return ev_service.list_volunteer_requests_for_society(db, society_id)
+
+
 @router.get("/{event_id}/volunteer-requests", response_model=List[VolunteerRequestResponse])
 def list_volunteer_requests(
     event_id: str,
@@ -67,7 +76,7 @@ def invite_volunteer(
 def approve_volunteer(
     request_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
+    current_user: User = Depends(get_current_user_from_token),
 ):
     return ev_service.approve_volunteer_request(db, current_user, request_id)
 
@@ -76,9 +85,18 @@ def approve_volunteer(
 def reject_volunteer(
     request_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
+    current_user: User = Depends(get_current_user_from_token),
 ):
     return ev_service.reject_volunteer_request(db, current_user, request_id)
+
+
+@router.post("/volunteer-requests/{request_id}/cancel", response_model=VolunteerRequestResponse)
+def cancel_volunteer(
+    request_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
+):
+    return ev_service.cancel_volunteer_invite(db, current_user, request_id)
 
 
 @router.post("/volunteer-requests/{request_id}/withdraw", response_model=VolunteerRequestResponse)
@@ -89,3 +107,13 @@ def withdraw_volunteer(
     current_user: User = Depends(get_current_user_from_token),
 ):
     return ev_service.withdraw_volunteer(db, current_user, request_id, payload.leave_reason)
+
+
+@router.post("/{event_id}/leave", response_model=EventResponse)
+def leave_event(
+    event_id: str,
+    payload: VolunteerWithdrawPayload = VolunteerWithdrawPayload(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token),
+):
+    return ev_service.leave_event(db, current_user, event_id, payload.leave_reason)

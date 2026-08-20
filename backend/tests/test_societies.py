@@ -163,3 +163,109 @@ def test_minimum_2_coordinators_operational_rule(client, db_session):
     resp2 = client.get(f"/api/v1/societies/{soc.id}")
     assert resp2.status_code == 200
     assert resp2.json()["isOperational"] is True
+
+
+def test_society_search_by_name(client, db_session):
+    from src.societies.models import Society
+
+    soc1 = Society(name="Emerald Heights", address="100 Emerald Way", key="EMERALD-1", admin_id="u-admin")
+    soc2 = Society(name="Sunset Boulevard", address="200 Sunset Rd", key="SUNSET-2", admin_id="u-admin")
+    db_session.add_all([soc1, soc2])
+    db_session.commit()
+
+    # Search all
+    res_all = client.get("/api/v1/societies")
+    assert res_all.status_code == 200
+    assert len(res_all.json()) >= 2
+
+    # Search by name "Emerald"
+    res_emerald = client.get("/api/v1/societies?name=Emerald")
+    assert res_emerald.status_code == 200
+    emerald_list = res_emerald.json()
+    assert any(s["name"] == "Emerald Heights" for s in emerald_list)
+    assert not any(s["name"] == "Sunset Boulevard" for s in emerald_list)
+
+    # Search by query "Sunset"
+    res_sunset = client.get("/api/v1/societies?query=Sunset")
+    assert res_sunset.status_code == 200
+    sunset_list = res_sunset.json()
+    assert any(s["name"] == "Sunset Boulevard" for s in sunset_list)
+
+
+def test_resident_leave_society_atomic(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society, Household
+
+    user = create_user(db_session, UserCreate(name="Leaving Res", email="leave@cen.app", password="password123"), role="resident")
+    soc = Society(name="Leave Soc", address="1 Leave Rd", admin_id=user.id, key="LEAVE-1")
+    db_session.add(soc)
+    db_session.flush()
+
+    hh = Household(id="h-leave-1", society_id=soc.id, unit_number="L-1", claimed=True, claimed_by_user_id=user.id)
+    db_session.add(hh)
+    user.society_id = soc.id
+    user.household_id = hh.id
+    db_session.commit()
+
+    # Login to get token
+    login_res = client.post("/api/v1/auth/login", json={"email": "leave@cen.app", "password": "password123"})
+    token = login_res.json()["accessToken"]
+
+    # Leave society
+    leave_res = client.post("/api/v1/users/me/leave-society", headers={"Authorization": f"Bearer {token}"})
+    assert leave_res.status_code == 200
+    data = leave_res.json()
+    assert data["societyId"] is None
+    assert data["householdId"] is None
+
+    # Check database state
+    db_session.refresh(hh)
+    assert hh.claimed is False
+    assert hh.claimed_by_user_id is None
+
+
+def test_deactivate_and_login_rejection(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+
+    admin = create_user(db_session, UserCreate(name="Admin User", email="admin_deact@cen.app", password="password123"), role="admin")
+    res = create_user(db_session, UserCreate(name="Res User", email="res_deact@cen.app", password="password123"), role="resident")
+
+    # Admin logins
+    login_adm = client.post("/api/v1/auth/login", json={"email": "admin_deact@cen.app", "password": "password123"})
+    adm_token = login_adm.json()["accessToken"]
+
+    # Admin deactivates resident
+    deact_res = client.post(f"/api/v1/users/{res.id}/deactivate", headers={"Authorization": f"Bearer {adm_token}"})
+    assert deact_res.status_code == 200
+    assert deact_res.json()["isActive"] is False
+
+    # Attempt login as deactivated user -> 403 Forbidden
+    failed_login = client.post("/api/v1/auth/login", json={"email": "res_deact@cen.app", "password": "password123"})
+    assert failed_login.status_code == 403
+    assert failed_login.json()["code"] == "ACCOUNT_DEACTIVATED"
+
+
+def test_coordinator_promotion_with_granular_privileges(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+
+    admin = create_user(db_session, UserCreate(name="Admin User 2", email="admin_prom@cen.app", password="password123"), role="admin")
+    res = create_user(db_session, UserCreate(name="Res User 2", email="res_prom@cen.app", password="password123"), role="resident")
+
+    login_adm = client.post("/api/v1/auth/login", json={"email": "admin_prom@cen.app", "password": "password123"})
+    adm_token = login_adm.json()["accessToken"]
+
+    # Promote with can_manage_onboarding=True, can_deactivate_residents=True
+    prom_res = client.post(
+        f"/api/v1/users/{res.id}/promote",
+        headers={"Authorization": f"Bearer {adm_token}"},
+        json={"canManageOnboarding": True, "canDeactivateResidents": True},
+    )
+    assert prom_res.status_code == 200
+    data = prom_res.json()
+    assert data["isCoordinator"] is True
+    assert data["canManageOnboarding"] is True
+    assert data["canDeactivateResidents"] is True
+

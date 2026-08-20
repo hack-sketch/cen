@@ -33,4 +33,16 @@ def authenticate_user(db: Session, login_in: UserLogin) -> User:
         raise UnauthorizedException("Invalid email or password")
     if not verify_password(login_in.password, user.hashed_password):
         raise UnauthorizedException("Invalid email or password")
+    if not user.is_active:
+        raise APIException(
+            status_code=403,
+            detail="Your account has been deactivated by society administration. Please contact your administrator.",
+            code="ACCOUNT_DEACTIVATED",
+        )
+    if not user.is_household_enabled:
+        raise APIException(
+            status_code=403,
+            detail="Your household access has been suspended by your Primary Resident Lead. Please contact your household lead.",
+            code="HOUSEHOLD_ACCESS_DISABLED",
+        )
     return user

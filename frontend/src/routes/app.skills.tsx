@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { skillService } from "@/services";
+import { skillService, bookingService } from "@/services";
 import { autoTag, matchSkillResource, type MatchResult } from "@/services/ai";
 import { useAuth } from "@/lib/auth";
 import { useState, useEffect } from "react";
@@ -37,7 +37,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Sparkles, Plus, Search, Filter, BookOpen, Layers, CheckCircle2 } from "lucide-react";
+import { Sparkles, Plus, Search, Filter, BookOpen, Layers, CheckCircle2, Clock, XCircle, Trash2, RotateCw } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/skills")({ component: Page });
@@ -57,11 +57,14 @@ const CAT_COLORS: Record<string, string> = {
 function Page() {
   const { user } = useAuth();
   const sid = user!.societyId!;
+  const qc = useQueryClient();
   const all = useQuery({ queryKey: ["skillsAll", sid], queryFn: () => skillService.list(sid) });
-  
+  const bookings = useQuery({ queryKey: ["userBookings"], queryFn: () => bookingService.listForUser() });
+
   const approved = all.data?.filter((s) => s.status === "approved") ?? [];
   const mine = all.data?.filter((s) => s.providerId === user!.id) ?? [];
-  
+  const pendingReceived = bookings.data?.filter((b) => b.ownerId === user!.id && b.itemType === "skill" && b.status === "pending_owner_approval") ?? [];
+
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [aiInput, setAiInput] = useState("");
@@ -154,6 +157,72 @@ function Page() {
         </CardContent>
       </Card>
 
+      {/* Global Pending Requests Banner for Skill Provider */}
+      {pendingReceived.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/80 shadow-md mb-6 animate-pulse-subtle">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-extrabold text-amber-950 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4.5 w-4.5 text-amber-700 animate-pulse" />
+                Pending Skill Purchase Requests ({pendingReceived.length})
+              </span>
+              <Badge className="bg-amber-600 text-white text-[10px] font-bold px-2 py-0.5">
+                Requires Action
+              </Badge>
+            </CardTitle>
+            <CardDescription className="text-xs text-amber-900 font-medium">
+              Residents want to book your offered skills. You can view all requests below. Approving one request will grant the service booking and decline other pending requests.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 pt-1">
+            {pendingReceived.map((b) => (
+              <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white border border-amber-200 rounded-xl text-xs shadow-xs hover:border-amber-300 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-200">
+                    {getInitials(b.buyerName)}
+                  </div>
+                  <div>
+                    <div className="font-bold text-ink text-xs">
+                      <span className="text-deep-forest font-extrabold">{b.buyerName}</span> requested <span className="font-bold text-ink">"{b.itemTitle}"</span>
+                    </div>
+                    <div className="text-[10.5px] text-on-surface-variant mt-0.5 flex items-center gap-2">
+                      <span>Offered value: <strong className="text-amber-900 font-extrabold">{b.credits} Credits</strong></span>
+                      <span>·</span>
+                      <span>Requested on {b.createdAt}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs font-bold px-4 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs"
+                    onClick={async () => {
+                      await bookingService.approveBooking(b.id);
+                      qc.invalidateQueries();
+                      toast.success(`Approved purchase request from ${b.buyerName}! +${b.credits} Credits added.`);
+                    }}
+                  >
+                    Approve & Fulfill (+{b.credits} Crd)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs font-semibold px-3 border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+                    onClick={async () => {
+                      await bookingService.declineBooking(b.id);
+                      qc.invalidateQueries();
+                      toast.info("Declined request.");
+                    }}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs list directories */}
       <Tabs defaultValue="browse" className="w-full">
         <div className="border-b border-line pb-px mb-6 flex justify-between items-center">
@@ -166,9 +235,14 @@ function Page() {
             </TabsTrigger>
             <TabsTrigger 
               value="mine" 
-              className="rounded-lg text-xs font-semibold px-4 py-2 cursor-pointer transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              className="rounded-lg text-xs font-semibold px-4 py-2 cursor-pointer transition-all data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1.5"
             >
-              My Listings ({mine.length})
+              <span>My Listings ({mine.length})</span>
+              {pendingReceived.length > 0 && (
+                <Badge className="bg-amber-600 text-white text-[9px] font-extrabold px-1.5 py-0 rounded-full animate-pulse">
+                  {pendingReceived.length} Pending
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -210,22 +284,35 @@ function Page() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((s) => (
-                <ExchangeItemCard
-                  key={s.id}
-                  id={s.id}
-                  title={s.title}
-                  description={s.description}
-                  category={s.category}
-                  credits={s.credits}
-                  providerName={s.providerName}
-                  providerId={s.providerId}
-                  tags={s.tags}
-                  type="skill"
-                  onAction={(id, userId) => skillService.book(id, userId)}
-                  categoryColors={CAT_COLORS}
-                />
-              ))}
+              {filtered.map((s) => {
+                const myPending = bookings.data?.find(
+                  (b) => b.itemId === s.id && b.buyerId === user!.id && b.status === "pending_owner_approval"
+                );
+                return (
+                  <ExchangeItemCard
+                    key={s.id}
+                    id={s.id}
+                    title={s.title}
+                    description={s.description}
+                    category={s.category}
+                    credits={s.credits}
+                    providerName={s.providerName}
+                    providerId={s.providerId}
+                    tags={s.tags}
+                    type="skill"
+                    myPendingBookingId={myPending?.id}
+                    onAction={async (id, userId) => {
+                      await bookingService.requestSkill(id, userId);
+                      qc.invalidateQueries();
+                    }}
+                    onCancelRequest={async (bId) => {
+                      await bookingService.cancelBooking(bId);
+                      qc.invalidateQueries();
+                    }}
+                    categoryColors={CAT_COLORS}
+                  />
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -237,32 +324,127 @@ function Page() {
             </div>
           ) : (
             <div className="grid gap-3.5">
-              {mine.map((s) => (
-                <Card key={s.id} className="border-line/60 shadow-sm hover:bg-panel/40 transition-colors">
-                  <CardContent className="p-4 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="font-bold text-sm text-ink truncate">{s.title}</div>
-                      <div className="text-xs text-on-surface-variant mt-1 flex flex-wrap items-center gap-2">
-                        <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase", CAT_COLORS[s.category] || "bg-slate-50")}>
-                          {s.category}
-                        </span>
-                        <span>·</span>
-                        <span className="font-semibold text-deep-forest">{s.credits} Credits</span>
+              {mine.map((s) => {
+                const itemRequests = pendingReceived.filter((b) => b.itemId === s.id);
+                return (
+                  <Card key={s.id} className="border-line/60 shadow-sm hover:bg-panel/40 transition-colors">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-ink truncate">{s.title}</div>
+                          <div className="text-xs text-on-surface-variant mt-1 flex flex-wrap items-center gap-2">
+                            <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase", CAT_COLORS[s.category] || "bg-slate-50")}>
+                              {s.category}
+                            </span>
+                            <span>·</span>
+                            <span className="font-semibold text-deep-forest">{s.credits} Credits</span>
+                          </div>
+                        </div>
+                                               <div className="flex items-center gap-2 flex-wrap justify-end">
+                          {s.status === "pending" ? (
+                            <Badge className="bg-amber-50 border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-amber-600" /> Pending Approval
+                            </Badge>
+                          ) : s.status === "rejected" ? (
+                            <Badge className="bg-rose-50 border-rose-200 text-rose-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex items-center gap-1">
+                              <XCircle className="h-3 w-3 text-rose-600" /> Rejected
+                            </Badge>
+                          ) : s.status === "deleted" ? (
+                            <Badge className="bg-slate-50 border-slate-200 text-slate-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex items-center gap-1">
+                              <XCircle className="h-3 w-3 text-slate-600" /> Deleted (Inactive)
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-emerald-50 border-emerald-200 text-emerald-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Approved
+                            </Badge>
+                          )}
+
+                          {(s.status === "deleted" || s.status === "rejected") && (
+                            <Button
+                              size="sm"
+                              className="h-8 text-xs font-bold px-3 bg-soft-violet hover:bg-soft-violet/90 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
+                              onClick={async () => {
+                                try {
+                                  await skillService.relist(s.id);
+                                  qc.invalidateQueries();
+                                  toast.success(`Relisting request for "${s.title}" submitted! Waiting for coordinator approval.`);
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to relist skill.");
+                                }
+                              }}
+                            >
+                              <RotateCw className="h-3.5 w-3.5" /> Relist Skill
+                            </Button>
+                          )}
+
+                          {s.status !== "deleted" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs font-semibold px-3 text-rose-600 border-rose-200 hover:bg-rose-50 hover:border-rose-300 cursor-pointer flex items-center gap-1.5 active:scale-98 transition-all"
+                              onClick={async () => {
+                                try {
+                                  await skillService.delete(s.id);
+                                  qc.invalidateQueries();
+                                  toast.success("Skill listing deleted successfully.");
+                                } catch (err: any) {
+                                  toast.error(err.message || "Failed to remove listing.");
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Delete Listing
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    
-                    <Badge className={`text-[9px] font-bold uppercase tracking-wider border px-2.5 py-0.5 rounded-full ${
-                      s.status === "approved" 
-                        ? "bg-emerald-50 border-emerald-100 text-emerald-800" 
-                        : s.status === "pending" 
-                        ? "bg-amber-50 border-amber-100 text-amber-800" 
-                        : "bg-rose-50 border-rose-100 text-rose-800"
-                    }`}>
-                      {s.status}
-                    </Badge>
-                  </CardContent>
-                </Card>
-              ))}
+
+                      {itemRequests.length > 0 && (
+                        <div className="pt-2 border-t border-amber-200/60 bg-amber-50/40 -mx-4 -mb-4 p-3.5 rounded-b-xl space-y-2">
+                          <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                            <Sparkles className="h-3.5 w-3.5 text-amber-700 animate-pulse" />
+                            Incoming Purchase Requests ({itemRequests.length})
+                          </div>
+                          <div className="space-y-2">
+                            {itemRequests.map((req) => (
+                              <div key={req.id} className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white border border-amber-200 rounded-lg text-xs">
+                                <div>
+                                  <span className="font-bold text-ink">{req.buyerName}</span> requested this skill
+                                  <div className="text-[10px] text-on-surface-variant">Offer: <span className="font-bold text-ink">{req.credits} Credits</span></div>
+                                </div>
+                                <div className="flex gap-1.5">
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-[11px] font-semibold px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                                    onClick={async () => {
+                                      await bookingService.approveBooking(req.id);
+                                      qc.invalidateQueries();
+                                      toast.success(`Approved purchase request from ${req.buyerName}! Other pending requests cleared.`);
+                                    }}
+                                  >
+                                    Approve & Fulfill
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[11px] font-semibold px-2 border-rose-200 text-rose-700 hover:bg-rose-50 cursor-pointer"
+                                    onClick={async () => {
+                                      await bookingService.declineBooking(req.id);
+                                      qc.invalidateQueries();
+                                      toast.info("Declined request.");
+                                    }}
+                                  >
+                                    Decline
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>

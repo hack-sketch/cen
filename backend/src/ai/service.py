@@ -10,9 +10,8 @@ from src.ai.schemas import (
     CategorizeComplaintResult,
     ChatbotResponsePayload,
     MatchItemResult,
-    NearbySocietyResult,
-    VerifyIdProofResult,
     VolunteerSuggestionResult,
+    SummarizeNoticeResult,
 )
 from src.config import settings
 from src.events.models import EventItem
@@ -86,27 +85,6 @@ def call_gemini_llm(
 
     return None
 
-
-def find_nearby_societies(db: Session, address: str) -> List[NearbySocietyResult]:
-    societies = db.query(Society).filter(Society.status == "active").all()
-    results = []
-    for i, s in enumerate(societies):
-        dist = round(0.4 + i * 1.2, 1)
-        reason = (
-            "Close to your listed address"
-            if address and ("mg" in address.lower() or "road" in address.lower())
-            else f"Nearest active {s.type.lower()} in your region"
-        )
-        soc_resp = SocietyResponse.model_validate(s)
-        results.append(
-            NearbySocietyResult(
-                society=soc_resp,
-                distance_km=dist,
-                match_reason=reason,
-            )
-        )
-    results.sort(key=lambda x: x.distance_km)
-    return results
 
 
 def chatbot_query(
@@ -586,33 +564,23 @@ def suggest_volunteers(db: Session, event_id: str) -> List[VolunteerSuggestionRe
     return results[:4]
 
 
-def verify_id_proof(image_url: str, user_name: Optional[str] = None) -> VerifyIdProofResult:
+def summarize_notice(content: str) -> SummarizeNoticeResult:
     prompt = (
-        f"Analyze this resident ID proof document at URL/path: '{image_url}'. User provided name: '{user_name or 'N/A'}'.\n"
-        "Return ONLY a JSON object in format: {\"isValidId\": true, \"confidence\": 0.95, \"documentType\": \"Government ID\", \"extractedName\": \"John Doe\", \"reason\": \"Legible ID document with name match\"}"
+        f"Provide a brief, clear, and professional one-sentence summary of the following community notice content. "
+        f"Do not add any greetings or conversational fluff. Just the summary.\n\n"
+        f"Content:\n\"{content}\""
     )
-
     llm_text = call_gemini_llm(prompt=prompt)
     if llm_text:
-        try:
-            json_match = re.search(r"\{.*\}", llm_text, re.DOTALL)
-            if json_match:
-                parsed = json.loads(json_match.group(0))
-                return VerifyIdProofResult(
-                    is_valid_id=bool(parsed.get("isValidId", True)),
-                    confidence=float(parsed.get("confidence", 0.9)),
-                    document_type=str(parsed.get("documentType", "Identity Document")),
-                    extracted_name=parsed.get("extractedName"),
-                    reason=str(parsed.get("reason", "Verified by Gemini AI Document Vision")),
-                )
-        except Exception:
-            pass
+        return SummarizeNoticeResult(summary=llm_text.strip())
 
-    # Heuristic fallback
-    return VerifyIdProofResult(
-        is_valid_id=True,
-        confidence=0.92,
-        document_type="Verified Identity Document",
-        extracted_name=user_name,
-        reason="Uploaded document verified successfully",
-    )
+    # Heuristic fallback if Gemini API is offline/unavailable
+    # Clean up and split sentences
+    sentences = [s.strip() for s in re.split(r"[.!?]", content) if s.strip()]
+    first_two = " ".join(sentences[:2]) if sentences else ""
+    if len(first_two) > 120:
+        first_two = first_two[:117] + "..."
+    if not first_two:
+        first_two = "Community Announcement"
+    return SummarizeNoticeResult(summary=f"Notice summary: {first_two}")
+

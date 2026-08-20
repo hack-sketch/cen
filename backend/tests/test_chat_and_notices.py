@@ -2,30 +2,30 @@ def test_send_and_get_chat_messages(client, db_session):
     from src.auth.service import create_user
     from src.users.schemas import UserCreate
 
-    u1 = create_user(db_session, UserCreate(name="Alice", email="alice@cen.app", password="password123"))
-    u2 = create_user(db_session, UserCreate(name="Bob", email="bob@cen.app", password="password123"))
+    u1 = create_user(db_session, UserCreate(name="Rohit", email="rohit@cen.app", password="password123"))
+    u2 = create_user(db_session, UserCreate(name="Vinay", email="vinay@cen.app", password="password123"))
 
-    login_resp = client.post("/api/v1/auth/login", json={"email": "alice@cen.app", "password": "password123"})
+    login_resp = client.post("/api/v1/auth/login", json={"email": "rohit@cen.app", "password": "password123"})
     token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Send message from Alice to Bob
+    # Send message from Rohit to Vinay
     send_resp = client.post(
         "/api/v1/chat/messages",
-        json={"receiverId": u2.id, "content": "Hi Bob, can I borrow your drill?"},
+        json={"receiverId": u2.id, "content": "Hi Vinay, can I borrow your drill?"},
         headers=headers,
     )
     assert send_resp.status_code == 200
     msg_data = send_resp.json()
-    assert msg_data["content"] == "Hi Bob, can I borrow your drill?"
-    assert msg_data["senderName"] == "Alice"
+    assert msg_data["content"] == "Hi Vinay, can I borrow your drill?"
+    assert msg_data["senderName"] == "Rohit"
 
-    # Get conversation history between Alice and Bob
+    # Get conversation history between Rohit and Vinay
     hist_resp = client.get(f"/api/v1/chat/messages?otherUserId={u2.id}", headers=headers)
     assert hist_resp.status_code == 200
     history = hist_resp.json()
     assert len(history) == 1
-    assert history[0]["content"] == "Hi Bob, can I borrow your drill?"
+    assert history[0]["content"] == "Hi Vinay, can I borrow your drill?"
 
 
 def test_create_and_list_notices(client, db_session):

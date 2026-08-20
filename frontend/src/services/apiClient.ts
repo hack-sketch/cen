@@ -51,27 +51,42 @@ export async function apiFetch<T>(
 
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-  if (!response.ok) {
-    let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
-    try {
-      const errorData = await response.json();
-      if (errorData.detail) {
-        if (typeof errorData.detail === "string") {
-          errorMessage = errorData.detail;
-        } else if (Array.isArray(errorData.detail)) {
-          errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData.detail) {
+          if (typeof errorData.detail === "string") {
+            errorMessage = errorData.detail;
+          } else if (Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+          }
         }
+      } catch {
+        // Use fallback error message
       }
-    } catch {
-      // Use fallback error message
+      throw new Error(errorMessage);
     }
-    throw new Error(errorMessage);
-  }
 
-  return response.json() as Promise<T>;
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    const text = await response.text();
+    return text ? (JSON.parse(text) as T) : (null as T);
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 }

@@ -74,7 +74,7 @@ function Signup() {
               <div className="space-y-1">
                 <Label className="text-xs font-bold text-ink">Full Name</Label>
                 <Input 
-                  placeholder="John Doe"
+                  placeholder="Rohit Sharma"
                   required 
                   value={form.name} 
                   onChange={(e) => setForm({ ...form, name: e.target.value })} 

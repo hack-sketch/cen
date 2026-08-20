@@ -15,6 +15,7 @@ from src.ai.router import router as ai_router
 from src.chat.router import router as chat_router
 from src.notices.router import router as notice_router
 from src.analytics.router import router as analytics_router
+from src.disputes.router import router as disputes_router
 
 from src.database import Base, engine
 # Import models to ensure table schemas are registered with Base metadata
@@ -26,15 +27,33 @@ import src.events.models  # noqa
 import src.complaints.models  # noqa
 import src.notices.models  # noqa
 import src.chat.models  # noqa
+import src.disputes.models  # noqa
 
-# Create tables if not exist
-Base.metadata.create_all(bind=engine)
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception as err:
+        print(f"Table init notice: {err}")
+
+    banner = "=" * 65
+    print(f"\n{banner}")
+    print(f" >> {settings.PROJECT_NAME} API Backend Running")
+    print(f"{banner}")
+    print(f" -- Swagger UI (Interactive Docs) : http://127.0.0.1:8000/docs")
+    print(f" -- ReDoc Documentation          : http://127.0.0.1:8000/redoc")
+    print(f" -- OpenAPI Spec JSON            : http://127.0.0.1:8000{settings.API_V1_STR}/openapi.json")
+    print(f"{banner}\n")
+    yield
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Exception Handlers
@@ -53,15 +72,32 @@ app.include_router(ai_router, prefix=settings.API_V1_STR)
 app.include_router(chat_router, prefix=settings.API_V1_STR)
 app.include_router(notice_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
+app.include_router(disputes_router, prefix=settings.API_V1_STR)
 
 # CORS Setup
 origins = settings.BACKEND_CORS_ORIGINS
 if isinstance(origins, str):
-    origins = [origins]
+    origins = [i.strip() for i in origins.split(",") if i.strip()]
+elif not isinstance(origins, list):
+    origins = [str(origins)]
+
+default_origins = [
+    "http://localhost:8081",
+    "http://127.0.0.1:8081",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+all_origins = list(set((origins or []) + default_origins))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins if origins else ["*"],
+    allow_origins=all_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

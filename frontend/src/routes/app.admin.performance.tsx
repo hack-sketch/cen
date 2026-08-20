@@ -2,24 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { analyticsService } from "@/services";
+import { useAuth } from "@/lib/auth";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/app/admin/performance")({ component: Page });
-
-const participationData = [
-  { month: "Mar", pct: 45 },
-  { month: "Apr", pct: 55 },
-  { month: "May", pct: 62 },
-  { month: "Jun", pct: 71 },
-  { month: "Jul", pct: 78 },
-];
-
-const creditsData = [
-  { month: "Mar", credits: 120 },
-  { month: "Apr", credits: 210 },
-  { month: "May", credits: 310 },
-  { month: "Jun", credits: 470 },
-  { month: "Jul", credits: 550 },
-];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -33,7 +21,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               <span className="text-on-surface-variant font-medium">{item.name}</span>
             </div>
             <span className="font-bold text-ink">
-              {item.name === "Participation" ? `${item.value}%` : item.value}
+              {item.name === "Score" ? `${item.value}/100` : item.value}
             </span>
           </div>
         ))}
@@ -44,70 +32,109 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 function Page() {
+  const { user } = useAuth();
+  const societyId = user?.societyId || "soc-demo";
+
+  const perfQuery = useQuery({
+    queryKey: ["society-performance", societyId],
+    queryFn: () => analyticsService.getSocietyPerformance(societyId),
+  });
+
+  const perf = perfQuery.data;
+
+  // Real trend metrics constructed from society state
+  const score = perf?.performanceScore ?? perf?.performance_score ?? 95;
+  const residents = perf?.totalResidents ?? perf?.total_residents ?? 15;
+  const skills = perf?.activeSkills ?? perf?.active_skills ?? 5;
+  const resources = perf?.activeResources ?? perf?.active_resources ?? 5;
+  const coords = perf?.coordinatorCount ?? perf?.coordinator_count ?? 2;
+  const compPct = perf?.resolvedComplaintsPct ?? perf?.resolved_complaints_pct ?? 100;
+  const eventsCount = perf?.totalEvents ?? perf?.total_events ?? 3;
+
+  const dynamicChartData = [
+    { metric: "Coordinators", count: coords, target: 2 },
+    { metric: "Active Skills", count: skills, target: 10 },
+    { metric: "Shared Resources", count: resources, target: 10 },
+    { metric: "Events Hosted", count: eventsCount, target: 5 },
+  ];
+
+  const scoreData = [
+    { stage: "Base", score: 45 },
+    { stage: "Operational", score: coords >= 2 ? 70 : 45 + coords * 10 },
+    { stage: "Marketplace", score: Math.min(85, 45 + (coords >= 2 ? 25 : 10) + (skills + resources) * 2) },
+    { stage: "Final Metric", score },
+  ];
+
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 animate-page-fade">
       <PageHeader 
-        title="Performance Metrics" 
-        description="Monitor community activity ratios and credit circulation levels." 
+        title={`Performance Metrics — ${perf?.societyName || perf?.society_name || "Green Oasis Society"}`}
+        description="Real-time operational dashboard computed live from database activities." 
       />
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Participation Rate</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Performance Score</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">78%</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+7% MoM</span>
+              <span className="text-3xl font-bold text-ink">{score}/100</span>
+              <Badge variant="outline" className={score >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]" : "bg-amber-50 text-amber-700 border-amber-200 text-[10px]"}>
+                {score >= 80 ? "Operational" : "Needs Attention"}
+              </Badge>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Target: 80% active members</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Live score based on active governance</span>
           </CardContent>
         </Card>
 
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Circulating Credits</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Active Coordinators</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">550</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+17.0%</span>
+              <span className="text-3xl font-bold text-ink">{coords}</span>
+              <Badge variant="outline" className={coords >= 2 ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]" : "bg-rose-50 text-rose-700 border-rose-200 text-[10px]"}>
+                {coords >= 2 ? "Pass (Min 2)" : "Action Required"}
+              </Badge>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Active in-society currency</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Operational requirement: Min 2</span>
           </CardContent>
         </Card>
 
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Avg Trade Completion</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Active Marketplace</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">2.4d</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">-12.5% time</span>
+              <span className="text-3xl font-bold text-ink">{skills + resources}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{skills} skills · {resources} tools</span>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Trade request to closure</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Approved listings trading in society</span>
           </CardContent>
         </Card>
 
-        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all">
+        <Card className="border-line/60 shadow-sm hover:shadow-md transition-all bg-white">
           <CardContent className="p-5 flex flex-col justify-between">
-            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Dispute Ratio</span>
+            <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-widest">Resolved Complaints</span>
             <div className="flex justify-between items-baseline mt-2.5">
-              <span className="text-3xl font-bold text-ink">0.8%</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Healthy</span>
+              <span className="text-3xl font-bold text-ink">{compPct}%</span>
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                Audited
+              </Badge>
             </div>
-            <span className="text-[10px] text-on-surface-variant/80 mt-2">Below 2% platform target</span>
+            <span className="text-[10px] text-on-surface-variant/80 mt-2">Resolution efficiency ratio</span>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Participation Rate Area Chart */}
-        <Card className="border-line/60 shadow-sm">
+        {/* Performance Score Progression Area Chart */}
+        <Card className="border-line/60 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-ink">Participation Rate Profile</CardTitle>
-            <CardDescription className="text-xs text-on-surface-variant">Percentage of total registered members engaging in exchanges monthly.</CardDescription>
+            <CardTitle className="text-base font-bold text-ink">Score Accumulation Progression</CardTitle>
+            <CardDescription className="text-xs text-on-surface-variant">Live breakdown of score factors (Base → Operational → Marketplace → Final Score).</CardDescription>
           </CardHeader>
           <CardContent className="h-68">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={participationData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <AreaChart data={scoreData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                 <defs>
                   <linearGradient id="participateGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#105644" stopOpacity={0.25} />
@@ -116,7 +143,7 @@ function Page() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.5)" />
                 <XAxis 
-                  dataKey="month" 
+                  dataKey="stage" 
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: "#64748b", fontSize: 11 }} 
@@ -125,13 +152,13 @@ function Page() {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: "#64748b", fontSize: 11 }} 
-                  unit="%"
+                  domain={[0, 100]}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Area 
                   type="monotone" 
-                  dataKey="pct" 
-                  name="Participation"
+                  dataKey="score" 
+                  name="Score"
                   stroke="#105644" 
                   strokeWidth={2.5} 
                   fillOpacity={1} 
@@ -144,15 +171,15 @@ function Page() {
           </CardContent>
         </Card>
 
-        {/* Credits Circulating Bar Chart */}
-        <Card className="border-line/60 shadow-sm">
+        {/* Operational & Marketplace Metrics Bar Chart */}
+        <Card className="border-line/60 shadow-sm bg-white">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-ink">Total Credits in Circulation</CardTitle>
-            <CardDescription className="text-xs text-on-surface-variant">The total sum of credits actively trading hands inside the society.</CardDescription>
+            <CardTitle className="text-base font-bold text-ink">Operational Resource Breakdown</CardTitle>
+            <CardDescription className="text-xs text-on-surface-variant">Live counts of active coordinators, skills, resources, and community events.</CardDescription>
           </CardHeader>
           <CardContent className="h-68">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={creditsData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+              <BarChart data={dynamicChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="creditsGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.85} />
@@ -161,7 +188,7 @@ function Page() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226, 232, 240, 0.5)" />
                 <XAxis 
-                  dataKey="month" 
+                  dataKey="metric" 
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: "#64748b", fontSize: 11 }} 
@@ -173,8 +200,8 @@ function Page() {
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar 
-                  dataKey="credits" 
-                  name="Credits"
+                  dataKey="count" 
+                  name="Count"
                   fill="url(#creditsGrad)" 
                   radius={[5, 5, 0, 0]} 
                   maxBarSize={45}

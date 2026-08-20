@@ -23,6 +23,11 @@ export interface User {
   offeredSkillsText?: string;
   volunteerInterest?: string;
   hasCompletedSurvey?: boolean;
+  isActive?: boolean;
+  isHouseholdEnabled?: boolean;
+  isPrimaryResident?: boolean;
+  canManageOnboarding?: boolean;
+  canDeactivateResidents?: boolean;
 }
 
 export interface Society {
@@ -34,6 +39,7 @@ export interface Society {
   longitude: number;
   adminId: string;
   capacity: number;
+  membersPerHousehold?: number;
   initialCredits: number;
   householdRangeStart: number;
   householdRangeEnd: number;
@@ -49,6 +55,9 @@ export interface Household {
   unitNumber: string;
   claimed: boolean;
   claimedByUserId?: string;
+  claimedByName?: string;
+  maxMembers?: number;
+  occupantsCount?: number;
 }
 
 export interface SocietyApplication {
@@ -62,6 +71,7 @@ export interface SocietyApplication {
   status: "pending" | "approved" | "rejected";
   submittedAt: string;
   residentCount?: number;
+  membersPerHousehold?: number;
   initialCredits?: number;
 }
 
@@ -75,6 +85,8 @@ export interface JoinRequest {
   idProofUrl: string;
   status: "pending" | "approved" | "rejected";
   submittedAt: string;
+  approverType?: "admin" | "primary_resident";
+  targetApproverId?: string;
 }
 
 export interface Skill {
@@ -98,7 +110,7 @@ export interface Resource {
   ownerName: string;
   available: boolean;
   credits: number;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "returned" | "borrowed";
   description: string;
   societyId: string;
 }
@@ -183,72 +195,106 @@ export interface ChatMessage {
 
 export const societies: Society[] = [
   {
+    id: "soc-demo",
+    name: "Green Oasis Society",
+    type: "Residential Apartment",
+    address: "100 Garden Way, Block B, Bengaluru",
+    latitude: 12.9716,
+    longitude: 77.5946,
+    adminId: "u-admin",
+    capacity: 100,
+    initialCredits: 20,
+    householdRangeStart: 1,
+    householdRangeEnd: 100,
+    coordinatorCount: 2,
+    status: "active",
+    performanceScore: 98,
+    key: "OASIS-2026",
+  },
+  {
     id: "soc-fresh",
     name: "Fresh Vista Community",
     type: "Residential Apartment",
-    address: "77 Orchid Boulevard, Bengaluru",
+    address: "77 Orchid Boulevard, Indiranagar, Bengaluru",
     latitude: 12.96,
     longitude: 77.58,
-    adminId: "u-freshadmin",
+    adminId: "u-admin",
     capacity: 150,
     initialCredits: 10,
     householdRangeStart: 1,
     householdRangeEnd: 150,
-    coordinatorCount: 0,
+    coordinatorCount: 2,
     status: "active",
-    performanceScore: 100,
+    performanceScore: 95,
     key: "FRESH-VISTA",
   },
   {
-    id: "soc-demo",
-    name: "Green Meadows Residency",
-    type: "Residential Apartment",
-    address: "12 Park Ave, Bengaluru",
-    latitude: 12.97,
-    longitude: 77.59,
-    adminId: "u-admin",
-    capacity: 200,
-    initialCredits: 15,
-    householdRangeStart: 101,
-    householdRangeEnd: 320,
-    coordinatorCount: 2,
-    status: "active",
-    performanceScore: 87,
-    key: "GREEN-2024",
-  },
-  {
-    id: "soc-2",
+    id: "soc-sunrise",
     name: "Sunrise Cultural Society",
-    type: "Cultural",
-    address: "44 MG Road, Bengaluru",
+    type: "Cultural Network",
+    address: "44 MG Road, Indiranagar, Bengaluru",
     latitude: 12.98,
     longitude: 77.6,
-    adminId: "u-admin2",
+    adminId: "u-admin",
     capacity: 120,
-    initialCredits: 10,
+    initialCredits: 15,
     householdRangeStart: 1,
     householdRangeEnd: 120,
-    coordinatorCount: 3,
+    coordinatorCount: 2,
     status: "active",
-    performanceScore: 72,
-    key: "SUNRISE-01",
+    performanceScore: 91,
+    key: "SUNRISE-2026",
   },
   {
-    id: "soc-3",
-    name: "Lakeside NGO Hub",
-    type: "NGO",
-    address: "5 Lakeview Rd, Bengaluru",
-    latitude: 12.95,
-    longitude: 77.62,
-    adminId: "u-admin3",
-    capacity: 80,
+    id: "soc-emerald",
+    name: "Emerald Heights Enclave",
+    type: "Residential Gated Community",
+    address: "78 Palm Grove Road, Koramangala, Bengaluru",
+    latitude: 12.93,
+    longitude: 77.61,
+    adminId: "u-admin",
+    capacity: 200,
+    initialCredits: 25,
+    householdRangeStart: 1,
+    householdRangeEnd: 200,
+    coordinatorCount: 3,
+    status: "active",
+    performanceScore: 99,
+    key: "EMERALD-2026",
+  },
+  {
+    id: "soc-royal",
+    name: "Royal Palms Gated Society",
+    type: "Residential Apartment",
+    address: "12 Royal Enclave, Whitefield, Bengaluru",
+    latitude: 12.97,
+    longitude: 77.75,
+    adminId: "u-admin",
+    capacity: 180,
     initialCredits: 20,
     householdRangeStart: 1,
-    householdRangeEnd: 80,
-    coordinatorCount: 1,
+    householdRangeEnd: 180,
+    coordinatorCount: 2,
     status: "active",
-    performanceScore: 65,
-    key: "LAKESIDE-9",
+    performanceScore: 88,
+    key: "PALMS-2026",
+  },
+  {
+    id: "soc-lakeside",
+    name: "Lakeside NGO & Residency Hub",
+    type: "Community Hub",
+    address: "5 Lakeview Rd, HSR Layout, Bengaluru",
+    latitude: 12.91,
+    longitude: 77.65,
+    adminId: "u-admin",
+    capacity: 90,
+    initialCredits: 15,
+    householdRangeStart: 1,
+    householdRangeEnd: 90,
+    coordinatorCount: 2,
+    status: "active",
+    performanceScore: 93,
+    key: "LAKESIDE-2026",
   },
 ];
 
@@ -268,7 +314,7 @@ export const users: User[] = [
   },
   {
     id: "u-owner",
-    name: "Priya Owner",
+    name: "Aman Owner",
     email: "owner@cen.app",
     role: "owner",
     creditBalance: 0,
@@ -280,11 +326,11 @@ export const users: User[] = [
   },
   {
     id: "u-admin",
-    name: "Ravi Admin",
+    name: "Rohit Admin",
     email: "admin@cen.app",
     role: "admin",
     societyId: "soc-demo",
-    creditBalance: 0,
+    creditBalance: 50,
     joinedDate: "2024-02-10",
     idProofUploaded: true,
     isCoordinator: false,
@@ -293,7 +339,7 @@ export const users: User[] = [
   },
   {
     id: "u-coord",
-    name: "Meera Coordinator",
+    name: "Vinay Coordinator",
     email: "coord@cen.app",
     role: "coordinator",
     societyId: "soc-demo",
@@ -307,7 +353,7 @@ export const users: User[] = [
   },
   {
     id: "u-coord2",
-    name: "Arjun Coordinator",
+    name: "Jignesh Coordinator",
     email: "coord2@cen.app",
     role: "coordinator",
     societyId: "soc-demo",
@@ -321,7 +367,7 @@ export const users: User[] = [
   },
   {
     id: "u-res",
-    name: "Anaya Resident",
+    name: "Aman Resident",
     email: "resident@cen.app",
     role: "resident",
     societyId: "soc-demo",
@@ -330,7 +376,23 @@ export const users: User[] = [
     joinedDate: "2024-04-12",
     idProofUploaded: true,
     isCoordinator: false,
+    isPrimaryResident: true,
     avatarColor: "#ef4444",
+    hasCompletedSurvey: true,
+  },
+  {
+    id: "u-res-co",
+    name: "Priya Resident",
+    email: "priya@cen.app",
+    role: "resident",
+    societyId: "soc-demo",
+    householdId: "h-103",
+    creditBalance: 10,
+    joinedDate: "2024-06-01",
+    idProofUploaded: true,
+    isCoordinator: false,
+    isPrimaryResident: false,
+    avatarColor: "#3b82f6",
     hasCompletedSurvey: true,
   },
   {
@@ -344,6 +406,7 @@ export const users: User[] = [
     joinedDate: "2024-05-01",
     idProofUploaded: true,
     isCoordinator: false,
+    isPrimaryResident: true,
     avatarColor: "#8b5cf6",
     hasCompletedSurvey: true,
   },
@@ -358,6 +421,7 @@ export const users: User[] = [
     joinedDate: "2024-05-15",
     idProofUploaded: true,
     isCoordinator: false,
+    isPrimaryResident: true,
     avatarColor: "#22c55e",
     hasCompletedSurvey: true,
   },
@@ -372,12 +436,21 @@ export const households: Household[] = Array.from({ length: 20 }, (_, i) => {
     104: "u-res2",
     105: "u-res3",
   };
+  const countIdx: Record<number, number> = {
+    101: 1,
+    102: 1,
+    103: 2,
+    104: 1,
+    105: 1,
+  };
   return {
     id: `h-${unit}`,
     societyId: "soc-demo",
     unitNumber: `A-${unit}`,
     claimed: !!claimedIdx[unit],
     claimedByUserId: claimedIdx[unit],
+    maxMembers: 4,
+    occupantsCount: countIdx[unit] || 0,
   };
 });
 

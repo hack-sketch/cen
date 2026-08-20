@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -23,12 +23,17 @@ router = APIRouter(tags=["Societies & Onboarding"])
 
 
 @router.get("/societies", response_model=List[SocietyResponse])
-def get_societies(db: Session = Depends(get_db)):
-    societies = soc_service.list_societies(db)
+def get_societies(
+    name: Optional[str] = None,
+    query: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    search_term = name or query
+    societies = soc_service.list_societies(db, name=search_term)
     res = []
     for s in societies:
         item = SocietyResponse.model_validate(s)
-        item.is_operational = soc_service.is_society_operational(s)
+        item.is_operational = soc_service.is_society_operational(s, db)
         res.append(item)
     return res
 
@@ -88,10 +93,10 @@ def approve_application(
     current_user: User = Depends(require_roles(["owner"])),
 ):
     soc = soc_service.approve_society_application(
-        db, application_id, capacity=payload.capacity, initial_credits=payload.initial_credits
+        db, application_id, capacity=payload.capacity, initial_credits=payload.initial_credits, members_per_household=payload.members_per_household
     )
     res = SocietyResponse.model_validate(soc)
-    res.is_operational = soc_service.is_society_operational(soc)
+    res.is_operational = soc_service.is_society_operational(soc, db)
     return res
 
 
@@ -113,7 +118,7 @@ def update_config(
 ):
     soc = soc_service.update_society_config(db, society_id, config_in)
     res = SocietyResponse.model_validate(soc)
-    res.is_operational = soc_service.is_society_operational(soc)
+    res.is_operational = soc_service.is_society_operational(soc, db)
     return res
 
 
@@ -125,7 +130,7 @@ def suspend(
 ):
     soc = soc_service.suspend_society(db, society_id)
     res = SocietyResponse.model_validate(soc)
-    res.is_operational = soc_service.is_society_operational(soc)
+    res.is_operational = soc_service.is_society_operational(soc, db)
     return res
 
 
@@ -133,7 +138,7 @@ def suspend(
 def get_society(society_id: str, db: Session = Depends(get_db)):
     soc = soc_service.get_society_by_id(db, society_id)
     res = SocietyResponse.model_validate(soc)
-    res.is_operational = soc_service.is_society_operational(soc)
+    res.is_operational = soc_service.is_society_operational(soc, db)
     return res
 
 
@@ -212,7 +217,7 @@ def get_my_join_request(
 def list_join_requests(
     society_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
+    current_user: User = Depends(get_current_user_from_token),
 ):
     return soc_service.list_join_requests_by_society(db, society_id)
 
@@ -230,16 +235,16 @@ def submit_join_request(
 def approve_join_request(
     request_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
+    current_user: User = Depends(get_current_user_from_token),
 ):
-    return soc_service.approve_join_request(db, request_id)
+    return soc_service.approve_join_request(db, request_id, current_user=current_user)
 
 
 @router.post("/societies/join-requests/{request_id}/reject", response_model=JoinRequestResponse)
 def reject_join_request(
     request_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["owner", "admin", "coordinator"])),
+    current_user: User = Depends(get_current_user_from_token),
 ):
     return soc_service.reject_join_request(db, request_id)
 

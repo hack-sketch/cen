@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   UserCog,
   CheckSquare,
+  CheckCircle2,
   Calendar,
   MessageSquare,
   Megaphone,
@@ -51,6 +52,7 @@ const NAV: Record<Role, NavItem[]> = {
     { to: "/app/owner/applications", label: "Applications", icon: ClipboardList },
     { to: "/app/owner/societies", label: "Societies", icon: Building2 },
     { to: "/app/owner/analytics", label: "Analytics", icon: BarChart3 },
+    { to: "/app/chat", label: "Direct Messages", icon: MessageSquare },
     { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
   ],
   admin: [
@@ -61,15 +63,18 @@ const NAV: Record<Role, NavItem[]> = {
     { to: "/app/admin/private-complaints", label: "Private Reports", icon: ShieldAlert },
     { to: "/app/admin/performance", label: "Performance Metrics", icon: BarChart3 },
     { to: "/app/notices", label: "Notice Board", icon: Megaphone },
+    { to: "/app/chat", label: "Direct Messages", icon: MessageSquare },
     { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
   ],
   coordinator: [
     { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/app/coord/approvals", label: "Pending Approvals", icon: CheckSquare },
+    { to: "/app/coord/approvals", label: "Approvals Hub", icon: CheckCircle2 },
+    { to: "/app/admin/onboarding", label: "Member Onboarding", icon: ClipboardList },
     { to: "/app/coord/complaints", label: "Reported Complaints", icon: AlertCircle },
     { to: "/app/coord/disputes", label: "Dispute Mediation", icon: ShieldAlert },
     { to: "/app/coord/events", label: "Events Coordinator", icon: Calendar },
     { to: "/app/notices", label: "Notice Board", icon: Megaphone },
+    { to: "/app/chat", label: "Direct Messages", icon: MessageSquare },
     { to: "/app/profile", label: "Profile Settings", icon: UserIcon },
   ],
   resident: [
@@ -95,7 +100,40 @@ export function AppShell({ children }: { children?: ReactNode }) {
 
   if (!user) return null;
 
-  const nav = NAV[effectiveRole];
+  if (user.isActive === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 animate-page-fade">
+        <div className="max-w-md w-full border border-rose-200 shadow-2xl rounded-2xl bg-white p-6 text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+            <ShieldAlert className="h-7 w-7" />
+          </div>
+          <h2 className="text-lg font-bold text-rose-950">Account Deactivated</h2>
+          <p className="text-xs text-on-surface-variant leading-relaxed">
+            Your account has been deactivated by administration. You can no longer access society dashboards or perform transactions.
+          </p>
+          <Button 
+            onClick={logout} 
+            className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs h-10 rounded-xl cursor-pointer active:scale-98 transition-all"
+          >
+            Sign Out
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const rawNav = NAV[effectiveRole];
+  const nav = [...rawNav].filter(
+    (item) => !(item.to === "/app/admin/onboarding" && user?.canManageOnboarding === false)
+  );
+
+  // If coordinator has ban/deactivation rights, provide direct sidebar access to Residents Directory
+  if (effectiveRole === "coordinator" && user?.canDeactivateResidents) {
+    if (!nav.some((item) => item.to === "/app/admin/residents")) {
+      nav.splice(2, 0, { to: "/app/admin/residents", label: "Residents Directory", icon: Users });
+    }
+  }
+
   const isCoord = user.isCoordinator;
 
   const toggleView = () => {
@@ -258,10 +296,10 @@ export function AppShell({ children }: { children?: ReactNode }) {
         </aside>
 
         {/* Main Work Area */}
-        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8 bg-surface-variant/20 overflow-y-auto">
+        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8 bg-surface-variant/20 overflow-y-auto overflow-x-hidden">
           <div 
             key={pathname} 
-            className="max-w-6xl mx-auto animate-page-fade"
+            className="max-w-6xl mx-auto animate-page-fade min-w-0 w-full overflow-x-hidden"
           >
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-40 gap-5">

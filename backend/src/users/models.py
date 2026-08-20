@@ -30,3 +30,8 @@ class User(Base):
     offered_skills_text = Column(String, nullable=True)
     volunteer_interest = Column(String, nullable=True)
     has_completed_survey = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_household_enabled = Column(Boolean, nullable=False, default=True)
+    is_primary_resident = Column(Boolean, nullable=False, default=False)
+    can_manage_onboarding = Column(Boolean, nullable=False, default=True)
+    can_deactivate_residents = Column(Boolean, nullable=False, default=False)

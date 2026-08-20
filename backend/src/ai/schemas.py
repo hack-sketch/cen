@@ -5,26 +5,6 @@ from src.users.schemas import UserResponse
 from src.societies.schemas import SocietyResponse
 
 
-class NearbyQuery(BaseModel):
-    address: str
-
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-
-class NearbySocietyResult(BaseModel):
-    society: SocietyResponse
-    distance_km: float
-    match_reason: str
-
-    model_config = ConfigDict(
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-
 class ChatMessageItem(BaseModel):
     role: str  # 'user' | 'assistant'
     content: str
@@ -126,9 +106,8 @@ class VolunteerSuggestionResult(BaseModel):
     )
 
 
-class VerifyIdProofPayload(BaseModel):
-    image_url: str
-    user_name: Optional[str] = None
+class SummarizeNoticePayload(BaseModel):
+    content: str
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -136,14 +115,11 @@ class VerifyIdProofPayload(BaseModel):
     )
 
 
-class VerifyIdProofResult(BaseModel):
-    is_valid_id: bool
-    confidence: float
-    document_type: str
-    extracted_name: Optional[str] = None
-    reason: str
+class SummarizeNoticeResult(BaseModel):
+    summary: str
 
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
     )
+
