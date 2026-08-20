@@ -6,11 +6,13 @@ import { joinRequestService, societyService, userService } from "@/services";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, ShieldAlert, LogOut, Building, Sparkles, ArrowRight } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CheckCircle2, Clock, ShieldAlert, LogOut, Building, Sparkles, ArrowRight, AlertCircle, RotateCcw, Building2, Edit3, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+
 
 export const Route = createFileRoute("/app")({
   beforeLoad: () => {
@@ -270,27 +272,117 @@ function AppLayout() {
 
   if (requestStatus === "rejected_society") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-panel/20 p-4 font-body relative overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[55%] h-[55%] bg-[#e2efe9]/30 rounded-full blur-[130px] -z-10"></div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50/50 p-4 sm:p-6 font-body relative overflow-hidden">
+        {/* Ambient background glows */}
+        <div className="absolute top-[-20%] left-[-10%] w-[55%] h-[55%] bg-[#fbeae9]/50 rounded-full blur-[130px] -z-10"></div>
         <div className="absolute bottom-[-20%] right-[-10%] w-[55%] h-[55%] bg-[#ece9f5]/30 rounded-full blur-[130px] -z-10"></div>
-        <div className="w-full max-w-md space-y-6">
-          <Card className="border-line/60 shadow-xl bg-white/95 backdrop-blur-md p-6 text-center space-y-5">
-            <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto text-rose-600">
-              <ShieldAlert className="h-6 w-6" />
+
+        <div className="w-full max-w-xl space-y-6 relative z-10">
+          <Card className="border-line/60 shadow-2xl bg-white/95 backdrop-blur-md p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-sm">
+                <ShieldAlert className="h-7 w-7" />
+              </div>
+              <div className="space-y-1">
+                <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px] font-bold px-2 py-0.5 mb-1">
+                  Application Declined
+                </Badge>
+                <CardTitle className="text-xl sm:text-2xl font-bold text-ink">
+                  Society Request Not Approved
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm text-on-surface-variant max-w-md mx-auto leading-relaxed">
+                  Your application to establish the network for <span className="font-semibold text-ink">"{extraInfo?.societyName || "your community"}"</span> was reviewed by platform administration.
+                </CardDescription>
+              </div>
             </div>
-            <div className="space-y-2">
-              <CardTitle className="text-xl font-bold text-ink">Application Rejected</CardTitle>
-              <CardDescription className="text-xs text-on-surface-variant leading-relaxed">
-                Your application to start <span className="font-semibold text-ink">"{extraInfo?.societyName}"</span> has been rejected by the platform managers.
-              </CardDescription>
+
+            {/* Explanation Remarks Box */}
+            <Alert className="border-rose-200/80 bg-rose-50/60 text-rose-950 p-4 rounded-xl">
+              <AlertCircle className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+              <div className="ml-2">
+                <AlertTitle className="font-bold text-xs text-rose-900">
+                  Reviewer Explanation & Feedback
+                </AlertTitle>
+                <AlertDescription className="text-xs text-rose-900/90 mt-1 leading-relaxed italic">
+                  "{extraInfo?.rejectionReason || extraInfo?.reason || "Application did not meet community network verification criteria. Please verify information and resubmit."}"
+                </AlertDescription>
+              </div>
+            </Alert>
+
+            {/* Action Pathways */}
+            <div className="space-y-3 pt-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant text-center">
+                Select Next Step
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Pathway 1: Edit & Resubmit */}
+                <button
+                  onClick={async () => {
+                    try {
+                      if (extraInfo?.id) await societyService.deleteApplication(extraInfo.id);
+                    } catch (e) {
+                      console.warn("delete application error:", e);
+                    }
+                    nav({ to: "/request-society" });
+                  }}
+                  className="flex flex-col items-start justify-between p-4 rounded-xl border border-deep-forest/30 bg-deep-forest/5 hover:bg-deep-forest/10 hover:border-deep-forest transition-all text-left group cursor-pointer shadow-xs active:scale-98"
+                >
+                  <div className="space-y-1.5 w-full">
+                    <div className="w-8 h-8 rounded-lg bg-deep-forest text-white flex items-center justify-center shadow-xs">
+                      <Edit3 className="h-4 w-4" />
+                    </div>
+                    <div className="font-bold text-xs text-ink group-hover:text-deep-forest transition-colors">
+                      Edit & Resubmit
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
+                      Update your network parameters, address, or details and submit a revised application.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-deep-forest mt-3">
+                    <span>Revise Form</span>
+                    <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </button>
+
+                {/* Pathway 2: Join Existing Society */}
+                <button
+                  onClick={async () => {
+                    try {
+                      if (extraInfo?.id) await societyService.deleteApplication(extraInfo.id);
+                    } catch (e) {
+                      console.warn("delete application error:", e);
+                    }
+                    nav({ to: "/join-society" });
+                  }}
+                  className="flex flex-col items-start justify-between p-4 rounded-xl border border-line-strong/60 bg-white hover:bg-panel/60 hover:border-ink/40 transition-all text-left group cursor-pointer shadow-xs active:scale-98"
+                >
+                  <div className="space-y-1.5 w-full">
+                    <div className="w-8 h-8 rounded-lg bg-panel border border-line-strong text-ink flex items-center justify-center shadow-xs">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                    <div className="font-bold text-xs text-ink group-hover:text-ink transition-colors">
+                      Join Existing Society
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
+                      Abandon setup and join one of our registered, active residential communities.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-ink mt-3">
+                    <span>Browse Societies</span>
+                    <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col gap-2 pt-2">
+
+            <div className="pt-2 border-t border-line/40 flex items-center justify-center">
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 onClick={() => logout()}
-                className="w-full h-10 border-line-strong hover:bg-panel text-xs font-semibold cursor-pointer active:scale-98 transition-all"
+                className="text-xs text-on-surface-variant hover:text-ink cursor-pointer flex items-center gap-1.5 h-9"
               >
-                Sign Out
+                <LogOut className="h-3.5 w-3.5" /> Sign Out
               </Button>
             </div>
           </Card>
@@ -298,6 +390,7 @@ function AppLayout() {
       </div>
     );
   }
+
 
   if (requestStatus === "none") {
     return (

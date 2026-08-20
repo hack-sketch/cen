@@ -77,6 +77,12 @@ def submit_society_application(
             code="APPLICATION_EXISTS",
         )
 
+    # Purge any previous rejected application records for this applicant email
+    db.query(SocietyApplication).filter(
+        SocietyApplication.applicant_contact.ilike(contact_email),
+        SocietyApplication.status == "rejected",
+    ).delete()
+
     app = SocietyApplication(
         society_name=app_in.society_name.strip(),
         type=app_in.type,
@@ -93,6 +99,7 @@ def submit_society_application(
     db.commit()
     db.refresh(app)
     return app
+
 
 
 def list_society_applications(db: Session) -> List[SocietyApplication]:
@@ -178,7 +185,9 @@ def approve_society_application(
     return new_soc
 
 
-def reject_society_application(db: Session, application_id: str) -> SocietyApplication:
+def reject_society_application(
+    db: Session, application_id: str, rejection_reason: Optional[str] = None
+) -> SocietyApplication:
     app = (
         db.query(SocietyApplication)
         .filter(SocietyApplication.id == application_id)
@@ -187,9 +196,11 @@ def reject_society_application(db: Session, application_id: str) -> SocietyAppli
     if not app:
         raise NotFoundException(f"Application with ID '{application_id}' not found")
     app.status = "rejected"
+    app.rejection_reason = rejection_reason or "Application did not meet community network eligibility requirements."
     db.commit()
     db.refresh(app)
     return app
+
 
 
 def update_society_config(

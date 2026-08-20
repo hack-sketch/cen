@@ -358,3 +358,75 @@ def test_join_request_hierarchical_permissions(client, db_session):
     assert pri_appr.json()["status"] == "approved"
 
 
+def test_society_application_rejection_remarks_and_resubmit(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import SocietyApplication
+
+    owner = create_user(db_session, UserCreate(name="Platform Owner", email="owner_app@cen.app", password="password123"), role="owner")
+    applicant = create_user(db_session, UserCreate(name="App Creator", email="creator@cen.app", password="password123"), role="resident")
+
+    # 1. Applicant submits application
+    login_app = client.post("/api/v1/auth/login", json={"email": "creator@cen.app", "password": "password123"})
+    app_token = login_app.json()["accessToken"]
+
+    sub_res = client.post(
+        "/api/v1/societies/applications",
+        headers={"Authorization": f"Bearer {app_token}"},
+        json={
+            "societyName": "Green Hills",
+            "address": "42 Hill Road",
+            "applicantName": "App Creator",
+            "applicantContact": "creator@cen.app",
+            "reason": "Want community exchange for our neighborhood",
+            "residentCount": 120,
+            "membersPerHousehold": 4,
+            "initialCredits": 15,
+        },
+    )
+    assert sub_res.status_code == 201
+    app_data = sub_res.json()
+    app_id = app_data["id"]
+    assert app_data["status"] == "pending"
+
+    # 2. Owner rejects application with explanation remarks
+    login_own = client.post("/api/v1/auth/login", json={"email": "owner_app@cen.app", "password": "password123"})
+    own_token = login_own.json()["accessToken"]
+
+    rej_res = client.post(
+        f"/api/v1/societies/applications/{app_id}/reject",
+        headers={"Authorization": f"Bearer {own_token}"},
+        json={"rejectionReason": "Address documentation requires municipal society registration proof."},
+    )
+    assert rej_res.status_code == 200
+    rej_data = rej_res.json()
+    assert rej_data["status"] == "rejected"
+    assert rej_data["rejectionReason"] == "Address documentation requires municipal society registration proof."
+
+    # 3. Applicant queries their application and receives the remarks
+    me_res = client.get("/api/v1/societies/applications/me", headers={"Authorization": f"Bearer {app_token}"})
+    assert me_res.status_code == 200
+    assert me_res.json()["status"] == "rejected"
+    assert me_res.json()["rejectionReason"] == "Address documentation requires municipal society registration proof."
+
+    # 4. Applicant edits and resubmits -> succeeds cleanly (purging old rejected record)
+    resub_res = client.post(
+        "/api/v1/societies/applications",
+        headers={"Authorization": f"Bearer {app_token}"},
+        json={
+            "societyName": "Green Hills Enclave",
+            "address": "42 Hill Road, Registered Block A",
+            "applicantName": "App Creator",
+            "applicantContact": "creator@cen.app",
+            "reason": "Updated with official municipal registration details",
+            "residentCount": 120,
+            "membersPerHousehold": 4,
+            "initialCredits": 15,
+        },
+    )
+    assert resub_res.status_code == 201
+    assert resub_res.json()["status"] == "pending"
+    assert resub_res.json()["societyName"] == "Green Hills Enclave"
+
+
+

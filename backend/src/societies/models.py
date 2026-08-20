@@ -56,6 +56,8 @@ class SocietyApplication(Base):
     resident_count = Column(Integer, nullable=False, default=100)
     members_per_household = Column(Integer, nullable=False, default=4)
     initial_credits = Column(Integer, nullable=False, default=10)
+    rejection_reason = Column(String, nullable=True)
+
 
 
 class Household(Base):

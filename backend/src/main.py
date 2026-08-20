@@ -30,11 +30,36 @@ import src.chat.models  # noqa
 import src.disputes.models  # noqa
 
 from contextlib import asynccontextmanager
+from sqlalchemy import text
+
+def auto_migrate_sqlite_schema(engine):
+    """
+    Ensures that any newly added columns in SQLAlchemy ORM models
+    are automatically created in the existing SQLite database without data loss.
+    """
+    try:
+        with engine.connect() as conn:
+            for table_name, table in Base.metadata.tables.items():
+                res = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+                if not res:
+                    continue
+                existing_cols = {row[1] for row in res}
+                for column in table.columns:
+                    if column.name not in existing_cols:
+                        col_type = column.type.compile(engine.dialect)
+                        alter_query = f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}"
+                        conn.execute(text(alter_query))
+                        conn.commit()
+                        print(f" [DB Migration] Added missing column '{column.name}' to table '{table_name}'")
+    except Exception as err:
+        print(f" [DB Migration Notice] {err}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         Base.metadata.create_all(bind=engine, checkfirst=True)
+        auto_migrate_sqlite_schema(engine)
     except Exception as err:
         print(f"Table init notice: {err}")
 
@@ -47,6 +72,7 @@ async def lifespan(app: FastAPI):
     print(f" -- OpenAPI Spec JSON            : http://127.0.0.1:8000{settings.API_V1_STR}/openapi.json")
     print(f"{banner}\n")
     yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

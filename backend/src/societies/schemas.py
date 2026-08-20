@@ -70,6 +70,7 @@ class SocietyApplicationResponse(SocietyApplicationCreate):
     id: str
     status: str
     submitted_at: str
+    rejection_reason: Optional[str] = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -87,6 +88,16 @@ class SocietyApprovePayload(BaseModel):
         alias_generator=to_camel,
         populate_by_name=True,
     )
+
+
+class SocietyRejectPayload(BaseModel):
+    rejection_reason: Optional[str] = Field(None, description="Explanation remarks from platform owner")
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
 
 
 class HouseholdCreate(BaseModel):

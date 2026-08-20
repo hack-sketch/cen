@@ -29,6 +29,8 @@ function Page() {
   const qc = useQueryClient();
   const apps = useQuery({ queryKey: ["apps"], queryFn: () => societyService.listApplications() });
   const [confirmReject, setConfirmReject] = useState<{ id: string; societyName: string } | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
 
   return (
     <div className="space-y-6 pb-12 animate-page-fade">
@@ -95,7 +97,15 @@ function Page() {
         ))}
       </div>
 
-      <AlertDialog open={!!confirmReject} onOpenChange={(open) => !open && setConfirmReject(null)}>
+      <AlertDialog 
+        open={!!confirmReject} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmReject(null);
+            setRejectReason("");
+          }
+        }}
+      >
         <AlertDialogContent className="bg-white border-line/60 rounded-2xl shadow-xl max-w-sm p-6 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
           <AlertDialogHeader className="space-y-2">
             <AlertDialogTitle className="text-base font-bold text-ink flex items-center gap-2">
@@ -103,9 +113,23 @@ function Page() {
               Reject Application
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-on-surface-variant leading-relaxed">
-              Are you sure you want to reject the application for <span className="font-bold text-ink">"{confirmReject?.societyName}"</span>?
+              Are you sure you want to reject the application for <span className="font-bold text-ink">"{confirmReject?.societyName}"</span>? Please provide feedback for the applicant:
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-1.5 pt-2">
+            <Label htmlFor="reject-reason" className="text-xs font-bold text-ink">
+              Rejection Remarks / Reason
+            </Label>
+            <Input
+              id="reject-reason"
+              placeholder="e.g., Incomplete address documentation, please resubmit."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="h-9 text-xs rounded-lg border-line-strong"
+            />
+          </div>
+
           <AlertDialogFooter className="mt-5 flex gap-2">
             <AlertDialogCancel className="h-9 px-4 text-xs font-semibold rounded-lg border-line-strong hover:bg-panel cursor-pointer">
               Cancel
@@ -113,10 +137,14 @@ function Page() {
             <AlertDialogAction 
               onClick={async () => {
                 if (confirmReject) {
-                  await societyService.rejectApplication(confirmReject.id);
-                  toast.info("Application rejected");
+                  await societyService.rejectApplication(
+                    confirmReject.id,
+                    rejectReason.trim() || "Application did not meet community network eligibility requirements."
+                  );
+                  toast.info("Application rejected with remarks");
                   qc.invalidateQueries({ queryKey: ["apps"] });
                   setConfirmReject(null);
+                  setRejectReason("");
                 }
               }}
               className="h-9 px-4 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white cursor-pointer active:scale-98 transition-all"
@@ -128,6 +156,7 @@ function Page() {
       </AlertDialog>
     </div>
   );
+
 }
 
 function ApproveDialog({

@@ -276,17 +276,24 @@ export const societyService = {
     }
     return delay(s ?? null);
   },
-  rejectApplication: async (id: string) => {
+  rejectApplication: async (id: string, rejectionReason?: string) => {
     try {
-      await apiFetch<any>(`/societies/applications/${id}/reject`, { method: "POST" });
+      await apiFetch<any>(`/societies/applications/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ rejectionReason }),
+      });
       return true;
-    } catch (err) {
-      console.warn("[API Notice] rejectApplication fallback:", err);
+    } catch (err: any) {
+      if (err.message) throw err;
     }
     const a = state.applications.find((x) => x.id === id);
-    if (a) a.status = "rejected";
+    if (a) {
+      a.status = "rejected";
+      a.rejectionReason = rejectionReason || "Application did not meet community network eligibility requirements.";
+    }
     return delay(true);
   },
+
   suspend: async (id: string) => {
     try {
       await apiFetch<any>(`/societies/${id}/suspend`, { method: "POST" });

@@ -73,10 +73,12 @@ export interface SocietyApplication {
   reason: string;
   status: "pending" | "approved" | "rejected";
   submittedAt: string;
+  rejectionReason?: string;
   residentCount?: number;
   membersPerHousehold?: number;
   initialCredits?: number;
 }
+
 
 export interface JoinRequest {
   id: string;

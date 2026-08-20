@@ -14,9 +14,11 @@ from src.societies.schemas import (
     SocietyApplicationCreate,
     SocietyApplicationResponse,
     SocietyApprovePayload,
+    SocietyRejectPayload,
     SocietyConfigUpdate,
     SocietyResponse,
 )
+
 from src.users.models import User
 
 router = APIRouter(tags=["Societies & Onboarding"])
@@ -103,10 +105,13 @@ def approve_application(
 @router.post("/societies/applications/{application_id}/reject", response_model=SocietyApplicationResponse)
 def reject_application(
     application_id: str,
+    payload: Optional[SocietyRejectPayload] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["owner"])),
 ):
-    return soc_service.reject_society_application(db, application_id)
+    reason = payload.rejection_reason if payload else None
+    return soc_service.reject_society_application(db, application_id, rejection_reason=reason)
+
 
 
 @router.patch("/societies/{society_id}/config", response_model=SocietyResponse)
