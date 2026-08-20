@@ -4,9 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/lib/auth";
+import { authService } from "@/services";
+import { sendPasswordResetEmail, resetDirectPassword } from "@/lib/firebaseAuth";
 import { toast } from "sonner";
-import { Sparkles, Building2, ShieldCheck, Milestone, ArrowRight, ChevronRight } from "lucide-react";
+import { Sparkles, Building2, ShieldCheck, Milestone, ArrowRight, ChevronRight, Mail, CheckCircle2, Loader2 } from "lucide-react";
+
+
 
 type LoginSearch = {
   redirect?: string;
@@ -36,7 +48,66 @@ function Login() {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("password123");
 
+  // Forgot / Reset password modal state
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEm = forgotEmail.trim().toLowerCase();
+    if (!cleanEm) {
+      toast.error("Please enter your account email address.");
+      return;
+    }
+    if (!forgotNewPassword || forgotNewPassword.length < 6) {
+      toast.error("New password must be at least 6 characters long.");
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      toast.error("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await authService.resetPassword(cleanEm, forgotNewPassword);
+      setEmail(cleanEm);
+      setPw(forgotNewPassword);
+      setForgotSuccess(true);
+      setForgotMessage(res.message || "Password updated successfully! You can now sign in.");
+      toast.success("Password updated successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update password. Please verify the email.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleQuickLoginAfterReset = async () => {
+    setForgotOpen(false);
+    try {
+      const u = await login(forgotEmail.trim().toLowerCase(), forgotNewPassword);
+      if (u) {
+        toast.success(`Signed in as ${u.name}`);
+        if (redirect) {
+          nav({ to: redirect });
+        } else {
+          nav({ to: "/app/dashboard" });
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to log in.");
+    }
+  };
+
+
   const submit = async (e: React.FormEvent) => {
+
     e.preventDefault();
     try {
       const u = await login(email, pw);
@@ -171,7 +242,18 @@ function Login() {
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
                     <Label className="text-xs font-bold text-ink">Password</Label>
-                    <a className="text-[10px] text-on-surface-variant hover:underline cursor-pointer">Forgot password?</a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotEmail(email);
+                        setForgotSuccess(false);
+                        setForgotMessage("");
+                        setForgotOpen(true);
+                      }}
+                      className="text-[10px] text-on-surface-variant hover:underline cursor-pointer bg-transparent border-0 p-0 font-medium"
+                    >
+                      Forgot password?
+                    </button>
                   </div>
                   <Input 
                     type="password" 
@@ -231,6 +313,136 @@ function Login() {
           </div>
         </div>
       </div>
+
+      {/* Forgot / Reset Password Modal Dialog */}
+      <Dialog
+        open={forgotOpen}
+        onOpenChange={(open) => {
+          setForgotOpen(open);
+          if (!open) {
+            setForgotSuccess(false);
+            setForgotMessage("");
+            setForgotNewPassword("");
+            setForgotConfirmPassword("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md bg-white border-line/60 shadow-2xl p-6">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-deep-forest/10 flex items-center justify-center text-deep-forest mb-2">
+              <Mail className="h-5 w-5" />
+            </div>
+            <DialogTitle className="text-lg font-bold text-ink">Reset Your Account Password</DialogTitle>
+            <DialogDescription className="text-xs text-on-surface-variant">
+              Enter your account email and choose a new password. The update will take effect immediately.
+            </DialogDescription>
+          </DialogHeader>
+
+          {forgotSuccess ? (
+            <div className="space-y-4 pt-2">
+              <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <AlertTitle className="font-bold text-xs">Password Updated Successfully</AlertTitle>
+                <AlertDescription className="text-xs text-emerald-800/90 mt-1">
+                  Your credentials for <span className="font-semibold">{forgotEmail}</span> have been updated in the system. Your login form is now filled with your new password.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <Button
+                  onClick={handleQuickLoginAfterReset}
+                  className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  Sign In Now (1-Click) <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setForgotOpen(false)}
+                  className="w-full text-xs border-line-strong hover:bg-panel cursor-pointer"
+                >
+                  Back to Sign In Form
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleForgotSubmit} className="space-y-3.5 pt-2">
+              <div className="space-y-1">
+                <Label htmlFor="forgot-email" className="text-xs font-bold text-ink">
+                  Account Email Address
+                </Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="resident@cen.app"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="h-9 rounded-lg border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="forgot-new-pw" className="text-xs font-bold text-ink">
+                  New Password
+                </Label>
+                <Input
+                  id="forgot-new-pw"
+                  type="password"
+                  placeholder="Enter new password (min. 6 characters)"
+                  required
+                  minLength={6}
+                  value={forgotNewPassword}
+                  onChange={(e) => setForgotNewPassword(e.target.value)}
+                  className="h-9 rounded-lg border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="forgot-confirm-pw" className="text-xs font-bold text-ink">
+                  Confirm New Password
+                </Label>
+                <Input
+                  id="forgot-confirm-pw"
+                  type="password"
+                  placeholder="Re-enter new password"
+                  required
+                  minLength={6}
+                  value={forgotConfirmPassword}
+                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                  className="h-9 rounded-lg border-line-strong/60 focus:border-deep-forest focus:ring-1 focus:ring-deep-forest/20 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setForgotOpen(false)}
+                  className="h-9 border-line-strong text-xs font-semibold hover:bg-panel cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="h-9 bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs px-5 rounded-lg cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  {forgotLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Updating...
+                    </>
+                  ) : (
+                    "Update Password"
+                  )}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+

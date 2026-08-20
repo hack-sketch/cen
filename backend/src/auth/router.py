@@ -6,7 +6,15 @@ from src.auth.security import create_access_token
 from src.database import get_db
 from src.dependencies import get_current_user_from_token
 from src.users.models import User
-from src.users.schemas import TokenResponse, UserCreate, UserLogin, UserResponse
+from src.users.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
+    PasswordResetPayload,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -25,6 +33,18 @@ def login(login_in: UserLogin, db: Session = Depends(get_db)):
     return TokenResponse(access_token=access_token, user=user)
 
 
+@router.post("/forgot-password", response_model=ForgotPasswordResponse, status_code=status.HTTP_200_OK)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    return auth_service.request_password_reset(db, payload.email)
+
+
+@router.post("/reset-password", response_model=ForgotPasswordResponse, status_code=status.HTTP_200_OK)
+def reset_password(payload: PasswordResetPayload, db: Session = Depends(get_db)):
+    return auth_service.reset_password(db, payload.email, payload.new_password)
+
+
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user_from_token)):
     return current_user
+
+

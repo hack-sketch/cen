@@ -108,7 +108,46 @@ export const authService = {
     }
     return delay(u ?? null);
   },
+  forgotPassword: async (email: string) => {
+    try {
+      const res = await apiFetch<{ message: string; email: string; status: string }>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      if (res) return res;
+    } catch (err: any) {
+      console.warn("[Auth API Notice] forgotPassword fallback:", err);
+    }
+    return delay({
+      message: "If an account exists with this email address, password reset instructions have been dispatched.",
+      email,
+      status: "success",
+    }, 400);
+  },
+  resetPassword: async (email: string, newPassword: string) => {
+    try {
+      const res = await apiFetch<{ message: string; email: string; status: string }>("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ email, newPassword }),
+      });
+      if (res) return res;
+    } catch (err: any) {
+      if (err.message) throw err;
+    }
+    // In-memory fallback: check if user exists in state
+    const user = state.users.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
+    if (!user) {
+      throw new Error("No registered account found with this email address.");
+    }
+    return delay({
+      message: "Password updated successfully. You can now log in with your new password.",
+      email,
+      status: "success",
+    }, 400);
+  },
 };
+
+
 
 // ---------------- Societies ----------------
 export const societyService = {

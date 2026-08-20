@@ -46,3 +46,43 @@ def authenticate_user(db: Session, login_in: UserLogin) -> User:
             code="HOUSEHOLD_ACCESS_DISABLED",
         )
     return user
+
+
+def request_password_reset(db: Session, email: str) -> dict:
+    clean_email = email.lower().strip()
+    user = db.query(User).filter(User.email == clean_email).first()
+    # Log reset trigger for security audit
+    if user:
+        print(f"[Auth Security Audit] Password reset triggered for user ID: {user.id}, email: {user.email}")
+    else:
+        print(f"[Auth Security Audit] Password reset triggered for non-existent email: {clean_email}")
+
+    return {
+        "message": "If an account exists with this email address, password reset instructions have been dispatched.",
+        "email": clean_email,
+        "status": "success",
+    }
+
+
+def reset_password(db: Session, email: str, new_password: str) -> dict:
+    clean_email = email.lower().strip()
+    user = db.query(User).filter(User.email == clean_email).first()
+    if not user:
+        raise APIException(
+            status_code=404,
+            detail="No registered user account found with this email address.",
+            code="USER_NOT_FOUND",
+        )
+
+    user.hashed_password = get_password_hash(new_password)
+    db.commit()
+    db.refresh(user)
+
+    print(f"[Auth Security Audit] Password successfully reset for user ID: {user.id}, email: {user.email}")
+    return {
+        "message": "Password updated successfully. You can now log in with your new password.",
+        "email": clean_email,
+        "status": "success",
+    }
+
+

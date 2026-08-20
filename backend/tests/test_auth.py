@@ -81,7 +81,71 @@ def test_promote_user_rbac(client, db_session):
     assert promoted_user["role"] == "coordinator"
 
 
+def test_forgot_password_endpoint(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+
+    create_user(db_session, UserCreate(name="Reset User", email="resetuser@cen.app", password="password123"))
+
+    # Test with valid existing user
+    resp = client.post("/api/v1/auth/forgot-password", json={"email": "resetuser@cen.app"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    assert data["email"] == "resetuser@cen.app"
+    assert "message" in data
+
+    # Test with non-existing user (should still return 200 success without error leakage)
+    resp_unknown = client.post("/api/v1/auth/forgot-password", json={"email": "unknown@cen.app"})
+    assert resp_unknown.status_code == 200
+    assert resp_unknown.json()["status"] == "success"
+
+    # Test with invalid email format
+    resp_invalid = client.post("/api/v1/auth/forgot-password", json={"email": "invalid-email"})
+    assert resp_invalid.status_code == 422
+
+
+def test_direct_password_reset_and_login_flow(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+
+    create_user(db_session, UserCreate(name="Direct Reset User", email="directreset@cen.app", password="oldpassword123"))
+
+    # Reset password to new password
+    reset_resp = client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": "directreset@cen.app", "new_password": "newpassword456"},
+    )
+    assert reset_resp.status_code == 200
+    reset_data = reset_resp.json()
+    assert reset_data["status"] == "success"
+
+    # Verify old password fails login
+    fail_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "directreset@cen.app", "password": "oldpassword123"},
+    )
+    assert fail_resp.status_code == 401
+
+    # Verify new password succeeds login
+    success_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "directreset@cen.app", "password": "newpassword456"},
+    )
+    assert success_resp.status_code == 200
+    assert "accessToken" in success_resp.json() or "access_token" in success_resp.json()
+
+    # Reset with unknown user should return 404
+    unknown_resp = client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": "nonexistent@cen.app", "new_password": "newpassword456"},
+    )
+    assert unknown_resp.status_code == 404
+
+
 def test_health_check(client):
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+

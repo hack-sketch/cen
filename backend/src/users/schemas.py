@@ -104,3 +104,35 @@ class OnboardingSurveyPayload(BaseModel):
         alias_generator=to_camel,
         populate_by_name=True,
     )
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    email: str
+    status: str = "success"
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
+class PasswordResetPayload(BaseModel):
+    email: EmailStr
+    new_password: str = Field(..., min_length=6)
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+
+
