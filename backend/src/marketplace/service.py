@@ -159,6 +159,7 @@ def create_resource(db: Session, user: User, res_in: ResourceCreate) -> Resource
         owner_name=user.name,
         available=True,
         credits=res_in.credits,
+        image_url=res_in.image_url,
         status="pending",
         description=res_in.description.strip(),
         society_id=user.society_id,
@@ -219,6 +220,8 @@ def update_resource(db: Session, user: User, resource_id: str, res_in: ResourceU
         res.credits = res_in.credits
     if res_in.description is not None:
         res.description = res_in.description.strip()
+    if res_in.image_url is not None:
+        res.image_url = res_in.image_url
 
     # Edit-on-relist workflow: Automatically reset status back to pending and clear rejection remarks
     res.status = "pending"

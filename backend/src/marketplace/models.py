@@ -45,6 +45,7 @@ class Resource(Base):
     status = Column(String, nullable=False, default="pending")  # pending | approved | rejected
     rejection_reason = Column(String, nullable=True)
     description = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)
     society_id = Column(String, nullable=False, index=True)
 
 

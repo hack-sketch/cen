@@ -72,6 +72,7 @@ class ResourceCreate(BaseModel):
     category: str
     credits: int = Field(..., gt=0)
     description: str
+    image_url: Optional[str] = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -84,6 +85,7 @@ class ResourceUpdate(BaseModel):
     category: Optional[str] = None
     credits: Optional[int] = Field(None, gt=0)
     description: Optional[str] = None
+    image_url: Optional[str] = None
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -102,6 +104,7 @@ class ResourceResponse(BaseModel):
     status: str
     rejection_reason: Optional[str] = None
     description: str
+    image_url: Optional[str] = None
     society_id: str
 
     model_config = ConfigDict(

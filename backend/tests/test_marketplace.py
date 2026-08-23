@@ -292,3 +292,60 @@ def test_resident_edit_and_resubmit_workflow(client, db_session):
     assert appr_res.status_code == 200
     assert appr_res.json()["status"] == "approved"
 
+
+def test_resource_image_and_universal_edit(client, db_session):
+    from src.auth.service import create_user
+    from src.users.schemas import UserCreate
+    from src.societies.models import Society
+    from src.marketplace.models import Resource, Skill
+
+    owner = create_user(db_session, UserCreate(name="Owner", email="owner_img@cen.app", password="password123"), role="owner")
+    soc = Society(name="Image Society", address="7 Photo St", admin_id=owner.id, capacity=50, key="IMG-SOC")
+    db_session.add(soc)
+    db_session.commit()
+
+    resident = create_user(db_session, UserCreate(name="Resident Lister", email="res_lister@cen.app", password="password123"), role="resident")
+    resident.society_id = soc.id
+    db_session.commit()
+
+    login_resp = client.post("/api/v1/auth/login", json={"email": "res_lister@cen.app", "password": "password123"})
+    res_token = login_resp.json().get("accessToken") or login_resp.json().get("access_token")
+    res_headers = {"Authorization": f"Bearer {res_token}"}
+
+    # 1. Create resource with image_url
+    sample_b64_image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    res_resp = client.post(
+        "/api/v1/marketplace/resources",
+        json={
+            "name": "Heavy Duty Drill",
+            "category": "Tools",
+            "credits": 3,
+            "description": "Cordless impact drill with 2 batteries.",
+            "imageUrl": sample_b64_image,
+        },
+        headers=res_headers,
+    )
+    assert res_resp.status_code == 201
+    created_res = res_resp.json()
+    assert created_res["imageUrl"] == sample_b64_image
+    assert created_res["status"] == "pending"
+
+    # 2. Universal edit of active/pending resource
+    updated_b64 = "data:image/png;base64,updated_sample_image"
+    edit_resp = client.put(
+        f"/api/v1/marketplace/resources/{created_res['id']}",
+        json={
+            "name": "Heavy Duty Impact Drill (Upgraded)",
+            "credits": 4,
+            "imageUrl": updated_b64,
+        },
+        headers=res_headers,
+    )
+    assert edit_resp.status_code == 200
+    updated_res = edit_resp.json()
+    assert updated_res["name"] == "Heavy Duty Impact Drill (Upgraded)"
+    assert updated_res["credits"] == 4
+    assert updated_res["imageUrl"] == updated_b64
+    assert updated_res["status"] == "pending"
+
+

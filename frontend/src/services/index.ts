@@ -1045,6 +1045,7 @@ export const resourceService = {
           category: r.category,
           credits: r.credits,
           description: r.description,
+          imageUrl: r.imageUrl,
         }),
       });
       if (res) return res;
@@ -1095,6 +1096,7 @@ export const resourceService = {
           category: data.category,
           credits: data.credits,
           description: data.description,
+          imageUrl: data.imageUrl,
         }),
       });
       if (res) return res;
@@ -1107,6 +1109,7 @@ export const resourceService = {
       if (data.category !== undefined) r.category = data.category;
       if (data.credits !== undefined) r.credits = data.credits;
       if (data.description !== undefined) r.description = data.description;
+      if (data.imageUrl !== undefined) r.imageUrl = data.imageUrl;
       r.status = "pending";
       r.available = true;
       r.rejectionReason = undefined;

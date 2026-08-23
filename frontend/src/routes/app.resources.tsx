@@ -36,7 +36,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Sparkles, Plus, Search, Filter, HelpCircle, Package, ArrowRight, Clock, CheckCircle2, XCircle, Trash2, RotateCw, AlertCircle, Edit3 } from "lucide-react";
+import { Sparkles, Plus, Search, Filter, HelpCircle, Package, ArrowRight, Clock, CheckCircle2, XCircle, Trash2, RotateCw, AlertCircle, Edit3, UploadCloud, Image as ImageIcon, X, ZoomIn } from "lucide-react";
+import { ImageViewerModal } from "@/components/layout/ImageViewerModal";
 
 import { cn, getInitials } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ function Page() {
   const [aiInput, setAiInput] = useState("");
   const [ai, setAi] = useState<MatchResult[] | null>(null);
   const [searchingAI, setSearchingAI] = useState(false);
+  const [previewResource, setPreviewResource] = useState<import("@/mocks/data").Resource | null>(null);
 
   const filtered = approved.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
 
@@ -354,6 +356,7 @@ function Page() {
                     providerName={r.ownerName}
                     providerId={r.ownerId}
                     available={r.available}
+                    imageUrl={r.imageUrl || (r as any).image_url}
                     type="resource"
                     myPendingBookingId={myPending?.id}
                     onAction={async (id, userId) => {
@@ -379,28 +382,48 @@ function Page() {
             </div>
           ) : (
             <div className="grid gap-3.5">
-              {mine.map((r) => {                const itemRequests = pendingReceived.filter((b) => b.itemId === r.id);
+              {mine.map((r) => {
+                const itemRequests = pendingReceived.filter((b) => b.itemId === r.id);
                 const isBorrowed = r.status === "borrowed";
                 const isPending = r.status === "pending";
                 const isRejected = r.status === "rejected";
                 const isReturned = r.status === "returned";
+                const itemImage = r.imageUrl || (r as any).image_url;
 
                 return (
                   <Card key={r.id} className="border-line/60 shadow-sm hover:bg-panel/40 transition-colors">
                     <CardContent className="p-4 space-y-3">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="min-w-0 space-y-1">
-                          <div className="font-bold text-sm text-ink truncate">{r.name}</div>
-                          <div className="text-xs text-on-surface-variant flex flex-wrap items-center gap-2">
-                            <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase", CAT_COLORS[r.category] || "bg-slate-50")}>
-                              {r.category}
-                            </span>
-                            <span>·</span>
-                            <span className="font-semibold text-deep-forest">{r.credits} Credits</span>
-                          </div>
-                          {r.description && (
-                            <p className="text-xs text-on-surface-variant/80 line-clamp-2 pt-0.5">{r.description}</p>
+                        <div className="flex items-start gap-3 min-w-0">
+                          {itemImage && (
+                            <div
+                              className="relative group cursor-pointer shrink-0"
+                              onClick={() => setPreviewResource(r)}
+                              title="Click to view full photo"
+                            >
+                              <img
+                                src={itemImage}
+                                alt={r.name}
+                                className="w-14 h-14 rounded-lg object-cover border border-line/60 bg-slate-100 group-hover:opacity-90 transition-all"
+                              />
+                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center text-white backdrop-blur-[0.5px]">
+                                <ZoomIn className="h-3.5 w-3.5" />
+                              </div>
+                            </div>
                           )}
+                          <div className="min-w-0 space-y-1">
+                            <div className="font-bold text-sm text-ink truncate">{r.name}</div>
+                            <div className="text-xs text-on-surface-variant flex flex-wrap items-center gap-2">
+                              <span className={cn("px-2 py-0.5 rounded border text-[9px] font-bold uppercase", CAT_COLORS[r.category] || "bg-slate-50")}>
+                                {r.category}
+                              </span>
+                              <span>·</span>
+                              <span className="font-semibold text-deep-forest">{r.credits} Credits</span>
+                            </div>
+                            {r.description && (
+                              <p className="text-xs text-on-surface-variant/80 line-clamp-2 pt-0.5">{r.description}</p>
+                            )}
+                          </div>
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -448,7 +471,7 @@ function Page() {
                             </Button>
                           )}
 
-                          {isRejected && (
+                          {r.status !== "deleted" && (
                             <EditResourceDialog resource={r} />
                           )}
 
@@ -566,6 +589,17 @@ function Page() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ImageViewerModal
+        open={Boolean(previewResource)}
+        onOpenChange={(open) => !open && setPreviewResource(null)}
+        imageUrl={previewResource?.imageUrl || (previewResource as any)?.image_url}
+        title={previewResource?.name || ""}
+        subtitle={`Shared by ${previewResource?.ownerName || user?.name || "You"}`}
+        category={previewResource?.category}
+        credits={previewResource?.credits}
+        description={previewResource?.description}
+      />
     </div>
   );
 }
@@ -585,6 +619,7 @@ function NewResDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [autotagging, setAutotagging] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
@@ -600,8 +635,23 @@ function NewResDialog() {
   useEffect(() => {
     if (!open) {
       form.reset();
+      setImagePreview(null);
     }
-  }, [open, form.reset]);
+  }, [open, form]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2_000_000) {
+      toast.error("Image file size must be under 2MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const suggest = async () => {
     const name = form.getValues("name");
@@ -627,12 +677,14 @@ function NewResDialog() {
       description: values.description,
       category: values.category,
       credits: values.credits,
+      imageUrl: imagePreview,
       available: true,
       ownerId: user!.id,
       ownerName: user!.name,
       societyId: user!.societyId!,
     });
     setOpen(false);
+    setImagePreview(null);
     qc.invalidateQueries();
     toast.success("Resource listing submitted for coordinator approval.");
   };
@@ -644,7 +696,7 @@ function NewResDialog() {
           <Plus className="mr-1 h-4 w-4" /> Share an Item
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md bg-white border-line/60 rounded-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-ink">List a Shared Resource</DialogTitle>
           <CardDescription className="text-xs text-on-surface-variant">Lend equipment, tools, or appliances to your neighbors to collect exchange credits.</CardDescription>
@@ -668,6 +720,44 @@ function NewResDialog() {
                 </FormItem>
               )}
             />
+
+            {/* Resource Photo Upload */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-ink">Resource Photo (Optional)</Label>
+              {imagePreview ? (
+                <div className="relative w-full h-36 rounded-xl border border-line overflow-hidden group bg-slate-100">
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2 h-7 w-7 rounded-full opacity-90 hover:opacity-100 cursor-pointer shadow-md"
+                    onClick={() => setImagePreview(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-line-strong/60 rounded-xl p-3.5 text-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <input
+                    type="file"
+                    id="new-res-image-upload"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                  <label htmlFor="new-res-image-upload" className="cursor-pointer flex flex-col items-center gap-1.5">
+                    <div className="w-8 h-8 rounded-full bg-deep-forest/10 text-deep-forest flex items-center justify-center">
+                      <UploadCloud className="h-4 w-4" />
+                    </div>
+                    <div className="text-xs font-bold text-ink">
+                      Click to upload resource photo
+                    </div>
+                    <div className="text-[10px] text-on-surface-variant">PNG, JPG, or WEBP up to 2MB</div>
+                  </label>
+                </div>
+              )}
+            </div>
             
             <FormField
               control={form.control}
@@ -754,6 +844,9 @@ function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Res
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(resource.imageUrl || (resource as any).image_url || null);
+
+  const isRejected = resource.status === "rejected";
 
   const form = useForm<ResourceFormValues>({
     resolver: zodResolver(resourceFormSchema),
@@ -773,8 +866,23 @@ function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Res
         category: resource.category,
         credits: resource.credits,
       });
+      setImagePreview(resource.imageUrl || (resource as any).image_url || null);
     }
   }, [open, resource, form]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2_000_000) {
+      toast.error("Image file size must be under 2MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const onSubmit = async (values: ResourceFormValues) => {
     setLoading(true);
@@ -784,10 +892,11 @@ function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Res
         description: values.description,
         category: values.category,
         credits: values.credits,
+        imageUrl: imagePreview,
       });
       setOpen(false);
       qc.invalidateQueries();
-      toast.success("Resource listing updated and resubmitted for coordinator review!");
+      toast.success("Resource listing updated and submitted for coordinator review!");
     } catch (err: any) {
       toast.error(err.message || "Failed to update resource.");
     } finally {
@@ -798,21 +907,33 @@ function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Res
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          size="sm"
-          className="h-8 text-xs font-bold px-3 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
-        >
-          <Edit3 className="h-3.5 w-3.5" /> Edit & Resubmit
-        </Button>
+        {isRejected ? (
+          <Button
+            size="sm"
+            className="h-8 text-xs font-bold px-3 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
+          >
+            <Edit3 className="h-3.5 w-3.5" /> Edit & Resubmit
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs font-semibold px-3 border-line-strong hover:bg-panel cursor-pointer active:scale-98 transition-all flex items-center gap-1.5"
+          >
+            <Edit3 className="h-3.5 w-3.5" /> Edit Listing
+          </Button>
+        )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-white border-line/60 rounded-2xl">
+      <DialogContent className="sm:max-w-md bg-white border-line/60 rounded-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
-            <Edit3 className="h-4 w-4 text-amber-600" />
-            Edit & Resubmit Resource
+            <Edit3 className={cn("h-4 w-4", isRejected ? "text-amber-600" : "text-deep-forest")} />
+            {isRejected ? "Edit & Resubmit Resource" : "Edit Resource Listing"}
           </DialogTitle>
           <CardDescription className="text-xs text-on-surface-variant">
-            Update your item details to address coordinator feedback. Resubmitting will shift status back to pending review.
+            {isRejected 
+              ? "Update your item details to address coordinator feedback. Resubmitting will shift status back to pending review."
+              : "Update your item details or photo. Saving will submit the revised listing for coordinator review."}
           </CardDescription>
         </DialogHeader>
 
@@ -845,6 +966,44 @@ function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Res
                 </FormItem>
               )}
             />
+
+            {/* Resource Photo Upload */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-ink">Resource Photo (Optional)</Label>
+              {imagePreview ? (
+                <div className="relative w-full h-36 rounded-xl border border-line overflow-hidden group bg-slate-100">
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2 h-7 w-7 rounded-full opacity-90 hover:opacity-100 cursor-pointer shadow-md"
+                    onClick={() => setImagePreview(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-line-strong/60 rounded-xl p-3.5 text-center bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <input
+                    type="file"
+                    id={`edit-res-image-upload-${resource.id}`}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                  <label htmlFor={`edit-res-image-upload-${resource.id}`} className="cursor-pointer flex flex-col items-center gap-1.5">
+                    <div className="w-8 h-8 rounded-full bg-deep-forest/10 text-deep-forest flex items-center justify-center">
+                      <UploadCloud className="h-4 w-4" />
+                    </div>
+                    <div className="text-xs font-bold text-ink">
+                      Click to upload or update photo
+                    </div>
+                    <div className="text-[10px] text-on-surface-variant">PNG, JPG, or WEBP up to 2MB</div>
+                  </label>
+                </div>
+              )}
+            </div>
             
             <FormField
               control={form.control}
@@ -907,9 +1066,12 @@ function EditResourceDialog({ resource }: { resource: import("@/mocks/data").Res
             <Button 
               type="submit" 
               disabled={loading}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold h-[38px] rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all"
+              className={cn(
+                "w-full text-white font-semibold h-[38px] rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all",
+                isRejected ? "bg-amber-600 hover:bg-amber-700" : "bg-deep-forest hover:bg-deep-forest/90"
+              )}
             >
-              {loading ? "Saving & Resubmitting..." : "Save Changes & Resubmit for Review"}
+              {loading ? "Saving & Submitting..." : isRejected ? "Save Changes & Resubmit for Review" : "Save Changes & Submit for Review"}
             </Button>
           </form>
         </Form>

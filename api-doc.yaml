@@ -1,0 +1,1940 @@
+openapi: 3.0.3
+info:
+  title: Community Exchange Network (CEN) API
+  description: |
+    Comprehensive RESTful API Specification for Community Exchange Network (CEN) — Final Milestone Deliverable.
+    Enables hyper-local time-credit banking, shared tool & equipment resource lifecycles with photo attachments, skill exchanges with edit-on-relist moderation, multi-resident society onboarding with secondary lead gating, Google Gemini AI-driven automation (RAG semantic search, volunteer matchmaking, chatbot, circular summarization), trade dispute bilateral justifications, and community governance.
+  version: 2.1.0
+  contact:
+    name: Team 094 Development Team
+    email: dev@cen.app
+
+servers:
+  - url: http://localhost:8000
+    description: Local Development Server
+  - url: https://api.cen.app
+    description: Production Environment
+
+paths:
+  # ---------------------------------------------------------------------------
+  # 1. Authentication Module (/api/v1/auth)
+  # ---------------------------------------------------------------------------
+  /api/v1/auth/signup:
+    post:
+      summary: Register a new user
+      description: Registers a new resident, coordinator, or admin user account with password hashing and initial role assignment.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                name:
+                  type: string
+                  example: "Rohit Sharma"
+                email:
+                  type: string
+                  format: email
+                  example: "rohit@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "Password123!"
+                role:
+                  type: string
+                  enum: [resident, coordinator, admin, owner]
+                  default: resident
+                  example: "resident"
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate user and issue JWT access token
+      description: Authenticates user credentials and returns a Bearer access token for session security.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "resident@cen.app"
+                password:
+                  type: string
+                  example: "password123"
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/auth/me:
+    get:
+      summary: Get current authenticated user profile
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /api/v1/auth/reset-password:
+    post:
+      summary: Direct password reset and credential recovery
+      description: Validates email, verifies password confirmation, hashes new password with bcrypt, and updates account record.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, new_password, confirm_password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "resident@cen.app"
+                new_password:
+                  type: string
+                  format: password
+                  example: "NewSecurePass123!"
+                confirm_password:
+                  type: string
+                  format: password
+                  example: "NewSecurePass123!"
+      responses:
+        '200':
+          description: Password reset successfully
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+
+  # ---------------------------------------------------------------------------
+  # 2. Users & Profiles Module (/api/v1/users)
+  # ---------------------------------------------------------------------------
+  /api/v1/users/me:
+    get:
+      summary: Get current authenticated user details and wallet credit balance
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile and wallet credit balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    patch:
+      summary: Update current user profile attributes
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                bio:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /api/v1/users/me/survey:
+    post:
+      summary: Save 3-step resident onboarding survey
+      description: Captures resident interest tags, skills offered, and volunteer preferences to feed AI candidate recommendations.
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                interests:
+                  type: array
+                  items:
+                    type: string
+                  example: ["Gardening", "Tech & IT", "Home Repairs"]
+                skills_offered:
+                  type: array
+                  items:
+                    type: string
+                  example: ["Carpentry", "Python Tutoring"]
+                volunteer_interest:
+                  type: string
+                  enum: ["yes", "no", "weekends"]
+                  example: "yes"
+      responses:
+        '200':
+          description: Survey responses saved successfully
+
+  /api/v1/users/me/id-proof:
+    post:
+      summary: Upload resident ID proof document
+      description: Stores resident ID proof image/document Base64 string for coordinator verification.
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_proof_url]
+              properties:
+                id_proof_url:
+                  type: string
+                  example: "data:image/png;base64,..."
+      responses:
+        '200':
+          description: ID proof document saved and verification status set to pending
+
+  /api/v1/users/me/leave-society:
+    post:
+      summary: Atomic resident leave society operation
+      description: Atomically unlinks resident from society, releases flat unit slot, revokes coordinator role, and cancels active listings.
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully left society
+
+  /api/v1/users:
+    get:
+      summary: List registered residents (or cross-community directory for Owner)
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          schema:
+            type: string
+          description: Society identifier (optional for platform owner)
+      responses:
+        '200':
+          description: Array of registered user objects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserProfile'
+
+  /api/v1/users/coordinators:
+    get:
+      summary: List active coordinators for a society
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of coordinator user objects
+
+  /api/v1/users/{user_id}:
+    get:
+      summary: Retrieve detailed profile of a specific user by unique ID
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Target user profile object
+
+  /api/v1/users/{user_id}/promote:
+    post:
+      summary: Promote resident to Coordinator with granular privileges
+      description: Elevates resident role to Coordinator with customizable permission flags.
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                can_manage_onboarding:
+                  type: boolean
+                  default: true
+                can_deactivate_residents:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: User promoted to coordinator
+
+  /api/v1/users/{user_id}/demote:
+    post:
+      summary: Demote coordinator back to Resident
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User demoted to resident
+
+  /api/v1/users/{user_id}/verify-id-proof:
+    post:
+      summary: Verify or reject resident ID proof document
+      tags:
+        - Users & Profiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: user_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: verified
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: ID proof verification updated
+
+  # ---------------------------------------------------------------------------
+  # 3. Societies & Onboarding Module (/api/v1/societies)
+  # ---------------------------------------------------------------------------
+  /api/v1/societies:
+    get:
+      summary: List and search registered societies
+      tags:
+        - Society Management
+      parameters:
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Search society by partial name or address
+      responses:
+        '200':
+          description: Array of active society records
+
+  /api/v1/societies/applications:
+    post:
+      summary: Submit a proposal to onboard a new residential society
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocietyApplicationCreate'
+      responses:
+        '201':
+          description: Proposal submitted for owner review
+    get:
+      summary: List pending society proposals (Owner)
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of society onboarding proposals
+
+  /api/v1/societies/applications/{id}/approve:
+    post:
+      summary: Approve society proposal and provision network key
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                capacity:
+                  type: integer
+                  example: 100
+                initial_credits:
+                  type: integer
+                  example: 10
+                members_per_household:
+                  type: integer
+                  example: 4
+      responses:
+        '200':
+          description: Society proposal approved and initialized
+
+  /api/v1/societies/applications/{id}/reject:
+    post:
+      summary: Reject society proposal with mandatory feedback reason
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rejection_reason]
+              properties:
+                rejection_reason:
+                  type: string
+                  example: "Address proof provided is incomplete or unverified."
+      responses:
+        '200':
+          description: Society application rejected
+
+  /api/v1/societies/applications/{id}/resubmit:
+    post:
+      summary: Revise and resubmit rejected society onboarding proposal
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocietyApplicationCreate'
+      responses:
+        '200':
+          description: Society proposal resubmitted (status shifted to pending)
+
+  /api/v1/societies/{society_id}/suspend:
+    post:
+      summary: Platform Owner emergency suspension of society network
+      description: Freezes all operational access across society members and triggers suspension lockdown guard.
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: society_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: "Pending compliance review and regulatory verification."
+      responses:
+        '200':
+          description: Society suspended
+
+  /api/v1/societies/{society_id}/revoke-suspension:
+    post:
+      summary: Restore suspended society network to active state
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Society restored to active status
+
+  /api/v1/societies/join-requests:
+    post:
+      summary: Submit a resident membership request to join a society
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [society_id, household_id, unit_number]
+              properties:
+                society_id:
+                  type: string
+                household_id:
+                  type: string
+                unit_number:
+                  type: string
+                id_proof_url:
+                  type: string
+      responses:
+        '201':
+          description: Join request submitted for moderation
+
+  /api/v1/societies/join-requests/{id}/approve:
+    post:
+      summary: Approve resident join request (Primary Lead & Admin Gated)
+      description: Enforces hierarchical gating; secondary co-occupants receive 403 Forbidden.
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Join request approved and initial credits granted
+
+  /api/v1/societies/join-requests/{id}/reject:
+    post:
+      summary: Reject resident join request and free unit slot
+      tags:
+        - Society Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Join request rejected
+
+  # ---------------------------------------------------------------------------
+  # 4. Household Registry Module (/api/v1/households)
+  # ---------------------------------------------------------------------------
+  /api/v1/households:
+    get:
+      summary: List registered household units in a society
+      tags:
+        - Household Registry
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of household unit objects
+    post:
+      summary: Register a single household unit
+      tags:
+        - Household Registry
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [society_id, unit_number]
+              properties:
+                society_id:
+                  type: string
+                unit_number:
+                  type: string
+                  example: "Tower A 101"
+      responses:
+        '201':
+          description: Unit registered successfully
+
+  /api/v1/households/bulk:
+    post:
+      summary: Bulk-generate sequential household unit range
+      tags:
+        - Household Registry
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [society_id, start_unit, end_unit]
+              properties:
+                society_id:
+                  type: string
+                blocks:
+                  type: array
+                  items:
+                    type: string
+                  example: ["A", "B"]
+                start_unit:
+                  type: integer
+                  example: 101
+                end_unit:
+                  type: integer
+                  example: 108
+                format_pattern:
+                  type: string
+                  example: "Block {Block}-{Unit}"
+      responses:
+        '201':
+          description: Bulk generation created units
+
+  /api/v1/households/{id}:
+    put:
+      summary: Edit unit number for a registered household
+      tags:
+        - Household Registry
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: unit_number
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Household unit updated
+    delete:
+      summary: Remove an unclaimed household unit
+      tags:
+        - Household Registry
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unit deleted
+
+  # ---------------------------------------------------------------------------
+  # 5. Time-Credit Wallet Module (/api/v1/wallet)
+  # ---------------------------------------------------------------------------
+  /api/v1/wallet/balance:
+    get:
+      summary: Get user time-credit balance
+      tags:
+        - Time-Credit Wallet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Balance response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credit_balance:
+                    type: integer
+                    example: 25
+
+  /api/v1/wallet/transactions:
+    get:
+      summary: Get user transaction ledger history
+      tags:
+        - Time-Credit Wallet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Chronological list of credit earnings and spends
+
+  /api/v1/wallet/transfer:
+    post:
+      summary: Atomic peer-to-peer time credit transfer
+      tags:
+        - Time-Credit Wallet
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient_id, amount]
+              properties:
+                recipient_id:
+                  type: string
+                amount:
+                  type: integer
+                  minimum: 1
+                  example: 3
+                description:
+                  type: string
+                  example: "Piano practice tutoring"
+      responses:
+        '200':
+          description: Credits transferred successfully
+
+  # ---------------------------------------------------------------------------
+  # 6. Marketplace: Skills Exchange (/api/v1/marketplace/skills)
+  # ---------------------------------------------------------------------------
+  /api/v1/marketplace/skills:
+    get:
+      summary: Browse approved skill offerings
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of approved skill offerings
+    post:
+      summary: Offer a new skill session (defaults to pending review)
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillCreate'
+      responses:
+        '201':
+          description: Skill created
+
+  /api/v1/marketplace/skills/{id}:
+    put:
+      summary: Edit and resubmit skill listing
+      description: Modifies skill parameters and automatically resets status back to `pending` review, clearing previous rejection remarks.
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillUpdate'
+      responses:
+        '200':
+          description: Skill updated and submitted for review
+
+  /api/v1/marketplace/skills/pending:
+    get:
+      summary: List skill submissions awaiting coordinator review
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pending skills array
+
+  /api/v1/marketplace/skills/{id}/approve:
+    post:
+      summary: Coordinator approve skill listing (Self-approval guarded)
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Skill approved
+
+  /api/v1/marketplace/skills/{id}/reject:
+    post:
+      summary: Coordinator reject skill listing with mandatory reason
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemRejectPayload'
+      responses:
+        '200':
+          description: Skill rejected with feedback
+
+  /api/v1/marketplace/skills/{id}/book:
+    post:
+      summary: Book an approved skill session
+      tags:
+        - Marketplace Skills
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Booking request created for provider approval
+
+  # ---------------------------------------------------------------------------
+  # 7. Marketplace: Shared Resources & Lifecycle (/api/v1/marketplace/resources)
+  # ---------------------------------------------------------------------------
+  /api/v1/marketplace/resources:
+    get:
+      summary: Browse approved shared community resources and tools
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of shared resources with photos
+    post:
+      summary: Share a tool/item with optional photo upload
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceCreate'
+      responses:
+        '201':
+          description: Resource posted for review
+
+  /api/v1/marketplace/resources/{id}:
+    put:
+      summary: Edit and resubmit shared resource listing
+      description: Modifies resource details (including photo) and automatically resets status to `pending` review.
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceUpdate'
+      responses:
+        '200':
+          description: Resource updated and submitted for review
+    delete:
+      summary: Delete resource listing (guarded if currently borrowed)
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resource deleted
+
+  /api/v1/marketplace/resources/pending:
+    get:
+      summary: List resource submissions awaiting coordinator review
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of pending resource items
+
+  /api/v1/marketplace/resources/{id}/approve:
+    post:
+      summary: Coordinator approve resource submission (Self-approval guarded)
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resource approved
+
+  /api/v1/marketplace/resources/{id}/reject:
+    post:
+      summary: Coordinator reject resource submission with mandatory reason
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemRejectPayload'
+      responses:
+        '200':
+          description: Resource rejected with feedback
+
+  /api/v1/marketplace/resources/{id}/book:
+    post:
+      summary: Request to borrow an approved resource
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Borrow request submitted for owner confirmation
+
+  /api/v1/marketplace/resources/{id}/return:
+    post:
+      summary: Mark borrowed resource as returned (Lender)
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resource marked returned
+
+  /api/v1/marketplace/resources/{id}/relist:
+    post:
+      summary: Relist returned or unlisted resource
+      tags:
+        - Marketplace Resources
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Relisting request submitted
+
+  # ---------------------------------------------------------------------------
+  # 8. Community Events & Dynamic Volunteer Matchmaker (/api/v1/events)
+  # ---------------------------------------------------------------------------
+  /api/v1/events:
+    get:
+      summary: List community events for a society
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of event objects
+    post:
+      summary: Schedule a new community event
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreate'
+      responses:
+        '201':
+          description: Event created
+
+  /api/v1/events/{id}:
+    put:
+      summary: Update scheduled event details (date, time, location, volunteers needed)
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreate'
+      responses:
+        '200':
+          description: Event updated
+    delete:
+      summary: Delete scheduled community event
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event deleted
+
+  /api/v1/events/{id}/complete:
+    post:
+      summary: Mark event as completed
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event marked completed
+
+  /api/v1/events/{id}/volunteer-requests:
+    get:
+      summary: List volunteer signup requests for an event
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Volunteer requests array
+
+  /api/v1/events/{id}/volunteer:
+    post:
+      summary: Submit self-nomination volunteer application
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Application logged
+
+  /api/v1/events/volunteer-requests/{id}/approve:
+    post:
+      summary: Approve volunteer application
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Volunteer confirmed
+
+  /api/v1/events/volunteer-requests/{id}/reject:
+    post:
+      summary: Decline volunteer application with reason
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rejection_reason:
+                  type: string
+                  example: "Volunteer capacity reached for this event"
+      responses:
+        '200':
+          description: Application declined with reason
+
+  /api/v1/events/volunteer-requests/{id}/reinvite:
+    post:
+      summary: Coordinator re-invite a previously declined volunteer
+      description: Resets volunteer request status back to `pending` and clears rejection remarks.
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Volunteer re-invited
+
+  /api/v1/events/volunteer-requests/{id}/withdraw:
+    post:
+      summary: Withdraw volunteer participation
+      tags:
+        - Community Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Volunteer withdrawn
+
+  # ---------------------------------------------------------------------------
+  # 9. Trade Disputes Module (/api/v1/disputes)
+  # ---------------------------------------------------------------------------
+  /api/v1/disputes:
+    post:
+      summary: File a new trade exchange dispute
+      tags:
+        - Trade Disputes
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [booking_id, reason, description]
+              properties:
+                booking_id:
+                  type: string
+                reason:
+                  type: string
+                  example: "Item damaged or incomplete session"
+                description:
+                  type: string
+                  example: "The equipment power cord was frayed upon delivery."
+      responses:
+        '201':
+          description: Dispute opened for coordinator mediation
+    get:
+      summary: List trade disputes in society
+      tags:
+        - Trade Disputes
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Array of dispute objects
+
+  /api/v1/disputes/{id}/notes:
+    post:
+      summary: Submit participant explanation or counter-justification note
+      description: Allows both buyer and owner counterparties to submit written statements and evidence.
+      tags:
+        - Trade Disputes
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  example: "The cord was checked prior to loan; borrower used third-party adapter."
+      responses:
+        '200':
+          description: Justification note attached to dispute record
+
+  /api/v1/disputes/{id}/status:
+    put:
+      summary: Coordinator arbitrate and resolve dispute
+      tags:
+        - Trade Disputes
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [under_review, resolved, dismissed]
+                  example: "resolved"
+                resolution_notes:
+                  type: string
+                  example: "Full credit escrow refunded to borrower."
+      responses:
+        '200':
+          description: Dispute arbitrated
+
+  # ---------------------------------------------------------------------------
+  # 10. Complaints & Grievance Redressal (/api/v1/complaints)
+  # ---------------------------------------------------------------------------
+  /api/v1/complaints:
+    get:
+      summary: List facility complaints feed (filters private complaints for residents)
+      tags:
+        - Complaints & Audits
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Complaints feed
+    post:
+      summary: File a new facility complaint
+      tags:
+        - Complaints & Audits
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, category, description]
+              properties:
+                title:
+                  type: string
+                category:
+                  type: string
+                description:
+                  type: string
+                is_private:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Complaint submitted
+
+  /api/v1/complaints/{id}/resolve:
+    post:
+      summary: Coordinator resolve grievance with remarks
+      tags:
+        - Complaints & Audits
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resolution_notes:
+                  type: string
+      responses:
+        '200':
+          description: Complaint resolved
+
+  # ---------------------------------------------------------------------------
+  # 11. Notice Board & Direct Messaging (/api/v1/notices, /api/v1/chat)
+  # ---------------------------------------------------------------------------
+  /api/v1/notices:
+    get:
+      summary: List society circulars and notices
+      tags:
+        - Notice Board
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: society_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notices list
+    post:
+      summary: Post a notice circular (Admin / Coordinator)
+      tags:
+        - Notice Board
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content, category]
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                category:
+                  type: string
+      responses:
+        '201':
+          description: Notice posted
+
+  /api/v1/chat/messages:
+    get:
+      summary: Fetch direct message conversation with another resident
+      tags:
+        - Direct Messaging
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: other_user_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conversation message history
+    post:
+      summary: Send a direct chat message to a resident
+      tags:
+        - Direct Messaging
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiver_id, content]
+              properties:
+                receiver_id:
+                  type: string
+                content:
+                  type: string
+      responses:
+        '201':
+          description: Message delivered
+
+  # ---------------------------------------------------------------------------
+  # 12. Google Gemini AI Engine & Analytics (/api/v1/ai, /api/v1/analytics, /health)
+  # ---------------------------------------------------------------------------
+  /api/v1/ai/chatbot:
+    post:
+      summary: Interactive Society AI Assistant (Gemini LLM with Society RAG context)
+      tags:
+        - AI Assistant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  example: "How do I borrow the lawn mower or transfer credits?"
+      responses:
+        '200':
+          description: Grounded conversational assistant response
+
+  /api/v1/ai/match-marketplace:
+    post:
+      summary: Natural Language RAG Intent Parser & Layman Summarizer
+      description: Parses colloquial queries into semantic catalog matches with percentage scores and AI intent pill tags.
+      tags:
+        - AI Assistant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query, societyId]
+              properties:
+                query:
+                  type: string
+                  example: "drill heavy concrete screws into balcony wall"
+                societyId:
+                  type: string
+      responses:
+        '200':
+          description: Scored semantic match items with plain-English summary
+
+  /api/v1/ai/suggest-volunteers:
+    get:
+      summary: Dynamic multi-attribute volunteer candidate recommendation engine
+      description: Scores resident profiles (62%–98%) against event description, interests, and availability keywords.
+      tags:
+        - AI Assistant
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: event_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recommended volunteer roster candidates
+
+  /api/v1/ai/summarize-notice:
+    post:
+      summary: Circular notice 2-bullet executive summarizer
+      tags:
+        - AI Assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Executive summary bullets
+
+  /api/v1/ai/categorize-complaint:
+    post:
+      summary: Facility complaint urgency & category classifier
+      tags:
+        - AI Assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        '200':
+          description: Category and urgency level
+
+  /api/v1/analytics/owner:
+    get:
+      summary: Global cross-society KPI overview (Platform Owner)
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Platform volume, active societies, and network health metrics
+
+  /api/v1/analytics/society/{id}:
+    get:
+      summary: Society-level health and transaction metrics
+      tags:
+        - Analytics
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Society activity and member engagement metrics
+
+  /health:
+    get:
+      summary: Server health check endpoint
+      tags:
+        - System Health
+      responses:
+        '200':
+          description: Server status operational
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: "bearer"
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [resident, coordinator, admin, owner]
+        societyId:
+          type: string
+          nullable: true
+        householdId:
+          type: string
+          nullable: true
+        creditBalance:
+          type: integer
+        isCoordinator:
+          type: boolean
+        isPrimaryResident:
+          type: boolean
+        idProofUploaded:
+          type: boolean
+        idProofVerified:
+          type: boolean
+        idProofUrl:
+          type: string
+          nullable: true
+
+    SocietyApplicationCreate:
+      type: object
+      required: [society_name, type, address, applicant_name, applicant_contact, reason]
+      properties:
+        society_name:
+          type: string
+          example: "Oasis Green Heights"
+        type:
+          type: string
+          example: "Residential Apartment"
+        address:
+          type: string
+          example: "42 Eco Park Road, Bangalore"
+        applicant_name:
+          type: string
+          example: "Priya Menon"
+        applicant_contact:
+          type: string
+          example: "priya@example.com"
+        reason:
+          type: string
+          example: "Founding mutual-aid tool library and skill sharing."
+        resident_count:
+          type: integer
+          default: 100
+        members_per_household:
+          type: integer
+          default: 4
+        initial_credits:
+          type: integer
+          default: 10
+
+    ItemRejectPayload:
+      type: object
+      required: [rejection_reason]
+      properties:
+        rejection_reason:
+          type: string
+          description: Mandatory moderation feedback explaining why the listing is being declined
+          example: "Listing description lacks safety instructions and borrowing term conditions."
+
+    SkillCreate:
+      type: object
+      required: [title, category, credits, description]
+      properties:
+        title:
+          type: string
+          example: "Mathematics & Calculus Tutoring"
+        category:
+          type: string
+          example: "Tutoring"
+        credits:
+          type: integer
+          minimum: 1
+          example: 5
+        description:
+          type: string
+          example: "Grade 10 to 12 calculus coaching and exam problem solving."
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["math", "calculus", "highschool"]
+
+    SkillUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        category:
+          type: string
+        credits:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    ResourceCreate:
+      type: object
+      required: [name, category, credits, description]
+      properties:
+        name:
+          type: string
+          example: "Bosch Impact Drill (850W)"
+        category:
+          type: string
+          example: "Tools"
+        credits:
+          type: integer
+          minimum: 1
+          example: 3
+        description:
+          type: string
+          example: "Heavy duty hammer drill with masonry and wood drill bit sets."
+        image_url:
+          type: string
+          nullable: true
+          description: Base64 data URL or uploaded image URL of the physical equipment
+          example: "data:image/jpeg;base64,..."
+
+    ResourceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        credits:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+
+    EventCreate:
+      type: object
+      required: [title, description, date]
+      properties:
+        title:
+          type: string
+          example: "Annual Monsoon Tree Planting Drive"
+        description:
+          type: string
+          example: "Planting native trees across common park area. Tools and saplings provided."
+        date:
+          type: string
+          example: "2026-09-20"
+        start_time:
+          type: string
+          example: "09:00"
+        end_time:
+          type: string
+          example: "12:00"
+        location:
+          type: string
+          example: "Central Society Garden"
+        volunteers_needed:
+          type: integer
+          default: 10
+
+  responses:
+    BadRequestError:
+      description: Invalid request parameters or business validation failure
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Validation failed or parameter missing."
+    UnauthorizedError:
+      description: Authentication token missing or invalid
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Not authenticated"
+    ForbiddenError:
+      description: Access forbidden by RBAC or domain security rule
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Forbidden access"

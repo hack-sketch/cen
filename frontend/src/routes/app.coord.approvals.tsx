@@ -19,8 +19,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ImageViewerModal } from "@/components/layout/ImageViewerModal";
 
 import { Textarea } from "@/components/ui/textarea";
 
@@ -185,6 +186,7 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<{ type: "approve" | "reject"; id: string; title: string } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [previewItem, setPreviewItem] = useState<import("@/mocks/data").Resource | null>(null);
 
   const handleOpen = (type: "approve" | "reject", id: string, title: string) => {
     setConfirm({ type, id, title });
@@ -197,14 +199,32 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
         <Card key={r.id} className="border-line/60 shadow-sm">
           <CardContent className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-bold text-sm text-ink">{r.name}</h3>
-                  <Badge variant="outline" className="text-[9px] border-line font-medium text-on-surface-variant bg-panel/30 uppercase">{r.category}</Badge>
-                  <Badge className="bg-deep-forest/10 border border-deep-forest/20 text-deep-forest text-[9px] uppercase font-bold px-2 py-0.5 rounded-full tracking-wider">{r.credits} credits</Badge>
+              <div className="flex items-start gap-3.5 min-w-0">
+                {(r.imageUrl || (r as any).image_url) && (
+                  <div
+                    className="relative group cursor-pointer shrink-0"
+                    onClick={() => setPreviewItem(r)}
+                    title="Click to view full image and inspect"
+                  >
+                    <img
+                      src={r.imageUrl || (r as any).image_url}
+                      alt={r.name}
+                      className="w-16 h-16 rounded-xl object-cover border border-line/60 bg-slate-100 shadow-2xs group-hover:opacity-90 transition-all"
+                    />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center text-white backdrop-blur-[0.5px]">
+                      <ZoomIn className="h-4 w-4" />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-bold text-sm text-ink">{r.name}</h3>
+                    <Badge variant="outline" className="text-[9px] border-line font-medium text-on-surface-variant bg-panel/30 uppercase">{r.category}</Badge>
+                    <Badge className="bg-deep-forest/10 border border-deep-forest/20 text-deep-forest text-[9px] uppercase font-bold px-2 py-0.5 rounded-full tracking-wider">{r.credits} credits</Badge>
+                  </div>
+                  <div className="text-[10px] text-on-surface-variant font-medium">Submitted by <span className="font-bold text-ink">{r.ownerName}</span></div>
+                  <p className="text-xs text-on-surface-variant leading-relaxed pt-1 pr-6">{r.description}</p>
                 </div>
-                <div className="text-[10px] text-on-surface-variant font-medium">Submitted by <span className="font-bold text-ink">{r.ownerName}</span></div>
-                <p className="text-xs text-on-surface-variant leading-relaxed pt-1 pr-6">{r.description}</p>
               </div>
               {!readonly && (
                 <div className="flex gap-2">
@@ -291,6 +311,46 @@ function ResList({ items, readonly }: { items: import("@/mocks/data").Resource[]
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ImageViewerModal
+        open={Boolean(previewItem)}
+        onOpenChange={(open) => !open && setPreviewItem(null)}
+        imageUrl={previewItem?.imageUrl || (previewItem as any)?.image_url}
+        title={previewItem?.name || ""}
+        subtitle={previewItem ? `Submitted by ${previewItem.ownerName}` : undefined}
+        category={previewItem?.category}
+        credits={previewItem?.credits}
+        description={previewItem?.description}
+        actions={
+          previewItem && !readonly ? (
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const item = previewItem;
+                  setPreviewItem(null);
+                  handleOpen("approve", item.id, item.name);
+                }}
+                className="bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-[34px] px-3.5 cursor-pointer shadow-sm active:scale-98 transition-all"
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const item = previewItem;
+                  setPreviewItem(null);
+                  handleOpen("reject", item.id, item.name);
+                }}
+                className="text-xs font-semibold h-[34px] px-3.5 border-rose-200 text-rose-600 hover:bg-rose-50 cursor-pointer active:scale-98 transition-all"
+              >
+                Reject
+              </Button>
+            </div>
+          ) : undefined
+        }
+      />
     </div>
   );
 }

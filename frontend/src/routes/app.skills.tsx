@@ -441,7 +441,7 @@ function Page() {
                             </Badge>
                           )}
 
-                          {s.status === "rejected" && (
+                          {s.status !== "deleted" && (
                             <EditSkillDialog skill={s} />
                           )}
 
@@ -761,6 +761,8 @@ function EditSkillDialog({ skill }: { skill: import("@/mocks/data").Skill }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const isRejected = skill.status === "rejected";
+
   const form = useForm<SkillFormValues>({
     resolver: zodResolver(skillFormSchema),
     defaultValues: {
@@ -796,7 +798,7 @@ function EditSkillDialog({ skill }: { skill: import("@/mocks/data").Skill }) {
       });
       setOpen(false);
       qc.invalidateQueries();
-      toast.success("Listing updated and resubmitted for coordinator review!");
+      toast.success("Listing updated and submitted for coordinator review!");
     } catch (err: any) {
       toast.error(err.message || "Failed to update listing.");
     } finally {
@@ -807,21 +809,33 @@ function EditSkillDialog({ skill }: { skill: import("@/mocks/data").Skill }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          size="sm"
-          className="h-8 text-xs font-bold px-3 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
-        >
-          <Edit3 className="h-3.5 w-3.5" /> Edit & Resubmit
-        </Button>
+        {isRejected ? (
+          <Button
+            size="sm"
+            className="h-8 text-xs font-bold px-3 bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-98 transition-all shadow-xs flex items-center gap-1.5"
+          >
+            <Edit3 className="h-3.5 w-3.5" /> Edit & Resubmit
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs font-semibold px-3 border-line-strong hover:bg-panel cursor-pointer active:scale-98 transition-all flex items-center gap-1.5"
+          >
+            <Edit3 className="h-3.5 w-3.5" /> Edit Listing
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md bg-white border-line/60 rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
-            <Edit3 className="h-4 w-4 text-amber-600" />
-            Edit & Resubmit Skill
+            <Edit3 className={cn("h-4 w-4", isRejected ? "text-amber-600" : "text-deep-forest")} />
+            {isRejected ? "Edit & Resubmit Skill" : "Edit Skill Listing"}
           </DialogTitle>
           <CardDescription className="text-xs text-on-surface-variant">
-            Update your skill details to address coordinator feedback. Resubmitting will shift status back to pending review.
+            {isRejected
+              ? "Update your skill details to address coordinator feedback. Resubmitting will shift status back to pending review."
+              : "Update your skill details. Saving will submit the revised listing for coordinator review."}
           </CardDescription>
         </DialogHeader>
 
@@ -939,9 +953,12 @@ function EditSkillDialog({ skill }: { skill: import("@/mocks/data").Skill }) {
             <Button 
               type="submit" 
               disabled={loading}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold h-[38px] rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all"
+              className={cn(
+                "w-full text-white font-semibold h-[38px] rounded-lg text-xs cursor-pointer shadow-sm active:scale-98 transition-all",
+                isRejected ? "bg-amber-600 hover:bg-amber-700" : "bg-deep-forest hover:bg-deep-forest/90"
+              )}
             >
-              {loading ? "Saving & Resubmitting..." : "Save Changes & Resubmit for Review"}
+              {loading ? "Saving & Submitting..." : isRejected ? "Save Changes & Resubmit for Review" : "Save Changes & Submit for Review"}
             </Button>
           </form>
         </Form>

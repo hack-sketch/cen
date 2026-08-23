@@ -121,6 +121,7 @@ export interface Resource {
   status: "pending" | "approved" | "rejected" | "returned" | "borrowed" | "deleted";
   rejectionReason?: string;
   description: string;
+  imageUrl?: string | null;
   societyId: string;
 }
 

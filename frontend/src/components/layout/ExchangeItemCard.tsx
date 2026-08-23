@@ -16,7 +16,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Sparkles, Package } from "lucide-react";
+import { Sparkles, Package, ZoomIn } from "lucide-react";
+import { ImageViewerModal } from "@/components/layout/ImageViewerModal";
 import { toast } from "sonner";
 
 export interface ExchangeItemCardProps {
@@ -30,6 +31,7 @@ export interface ExchangeItemCardProps {
   tags?: string[];
   available?: boolean;
   type: "skill" | "resource";
+  imageUrl?: string | null;
   myPendingBookingId?: string;
   summary?: string;
   intentTags?: string[];
@@ -62,6 +64,7 @@ export function ExchangeItemCard({
   tags = [],
   available = true,
   type,
+  imageUrl,
   myPendingBookingId,
   summary,
   intentTags = [],
@@ -73,6 +76,7 @@ export function ExchangeItemCard({
   const qc = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   const isOwner = providerId === user!.id;
   const insCredits = (user!.creditBalance ?? 0) < credits;
@@ -115,6 +119,22 @@ export function ExchangeItemCard({
   return (
     <>
       <Card className="border-line/60 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden bg-white">
+        {imageUrl && (
+          <div 
+            className="w-full h-36 bg-slate-100 border-b border-line/40 overflow-hidden relative group cursor-pointer"
+            onClick={() => setShowImageModal(true)}
+            title="Click to view full image"
+          >
+            <img
+              src={imageUrl}
+              alt={title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-semibold backdrop-blur-[1px]">
+              <ZoomIn className="h-4 w-4" /> View Full Photo
+            </div>
+          </div>
+        )}
         <CardContent className="p-5 flex flex-col justify-between flex-1 space-y-4">
           <div className="space-y-2">
             <div className="flex justify-between items-center">
@@ -253,6 +273,17 @@ export function ExchangeItemCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ImageViewerModal
+        open={showImageModal}
+        onOpenChange={setShowImageModal}
+        imageUrl={imageUrl}
+        title={title}
+        subtitle={`Shared by ${providerName}`}
+        category={category}
+        credits={credits}
+        description={description}
+      />
     </>
   );
 }
