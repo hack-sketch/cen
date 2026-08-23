@@ -31,7 +31,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatDocFilename } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1236,7 +1236,7 @@ function ResidentDash() {
                       </div>
 
                       <div className="bg-amber-50/80 border border-amber-200 p-2.5 rounded-xl text-[10px] text-amber-950 font-medium text-center">
-                        📄 Document File: <strong className="font-bold text-ink">{viewingIdProof.url.replace(/^mock:\/\//, "")}</strong>
+                        📄 Document File: <strong className="font-bold text-ink">{formatDocFilename(viewingIdProof.url)}</strong>
                       </div>
                     </div>
                   )}

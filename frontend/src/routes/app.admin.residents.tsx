@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { cn, formatDocFilename } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/admin/residents")({ component: Page });
 
@@ -384,7 +384,7 @@ function Page() {
               viewingIdDoc.idProofUrl.startsWith("http") || 
               viewingIdDoc.idProofUrl.startsWith("blob:")
             );
-            const filename = viewingIdDoc.idProofUrl ? viewingIdDoc.idProofUrl.replace(/^mock:\/\//, "") : "Submitted_ID_Document.pdf";
+            const filename = formatDocFilename(viewingIdDoc.idProofUrl) || "Submitted_ID_Document.pdf";
             const isVerified = viewingIdDoc.idProofVerified || viewingIdDoc.verificationStatus === "verified";
 
             return (

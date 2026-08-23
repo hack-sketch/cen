@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { societyService, userService } from "@/services";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, ShieldCheck, Mail, User as UserIcon, Building, Activity, Database, LogOut, Sparkles, Clock, UploadCloud, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDocFilename } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 
 
@@ -557,10 +557,20 @@ function ProfileSurveyCard({ user }: { user: any }) {
 function IdProofUploadDialog({ user }: { user: any }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [docName, setDocName] = useState(user?.idProofUrl ? user.idProofUrl.replace(/^mock:\/\//, "") : "");
+  const [docName, setDocName] = useState(formatDocFilename(user?.idProofUrl));
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(user?.idProofUrl || null);
   const qc = useQueryClient();
   const { setUserById } = useAuth();
+
+  useEffect(() => {
+    if (user?.idProofUrl) {
+      setFileDataUrl(user.idProofUrl);
+      setDocName(formatDocFilename(user.idProofUrl));
+    } else {
+      setFileDataUrl(null);
+      setDocName("");
+    }
+  }, [user?.idProofUrl, open]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -599,6 +609,11 @@ function IdProofUploadDialog({ user }: { user: any }) {
 
   const isVerified = user.idProofVerified || user.verificationStatus === "verified";
   const isPending = !isVerified && (user.idProofUploaded || user.verificationStatus === "pending");
+  const isImage = fileDataUrl && (
+    fileDataUrl.startsWith("data:image") || 
+    fileDataUrl.startsWith("http") || 
+    fileDataUrl.startsWith("blob:")
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -612,7 +627,7 @@ function IdProofUploadDialog({ user }: { user: any }) {
           {isVerified ? "Update ID Document" : isPending ? "Replace Submitted Proof" : "Upload ID Proof Document"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md w-[95vw] border-line/60 rounded-2xl p-4 sm:p-6 bg-white">
+      <DialogContent className="sm:max-w-md w-[95vw] border-line/60 rounded-2xl p-4 sm:p-6 bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pb-3 border-b border-line/35">
           <DialogTitle className="text-base font-bold text-ink flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-deep-forest" />
@@ -636,16 +651,25 @@ function IdProofUploadDialog({ user }: { user: any }) {
               <div className="w-10 h-10 rounded-full bg-deep-forest/10 text-deep-forest flex items-center justify-center">
                 <UploadCloud className="h-5 w-5" />
               </div>
-              <div className="text-xs font-bold text-ink">
+              <div className="text-xs font-bold text-ink truncate max-w-[280px]">
                 {docName ? docName : "Click to select ID photo or document"}
               </div>
               <span className="text-[10px] text-on-surface-variant">Supports PDF, PNG, JPG up to 2MB</span>
             </label>
           </div>
 
-          {fileDataUrl && fileDataUrl.startsWith("data:image") && (
-            <div className="rounded-xl border border-line p-2 bg-panel/30 flex justify-center">
-              <img src={fileDataUrl} alt="ID Preview" className="max-h-36 object-contain rounded-lg shadow-2xs" />
+          {fileDataUrl && (
+            <div className="rounded-xl border border-line p-3 bg-panel/30 flex flex-col items-center justify-center gap-2">
+              {isImage ? (
+                <div className="relative group max-h-40 overflow-hidden rounded-lg">
+                  <img src={fileDataUrl} alt="ID Preview" className="max-h-36 w-full object-contain rounded-lg shadow-2xs bg-white border" />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-xs font-bold text-deep-forest p-2 bg-white rounded-lg border w-full justify-center">
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="truncate max-w-[240px]">{docName || "Submitted_ID_Proof.pdf"}</span>
+                </div>
+              )}
             </div>
           )}
 

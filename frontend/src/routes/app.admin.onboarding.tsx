@@ -23,7 +23,7 @@ import { householdService, joinRequestService, societyService, userService } fro
 import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, FileCheck, Sparkles, CheckCircle2, XCircle, Building2, Pencil, Trash2, Users, Home, Crown, ShieldAlert, UserX, UserCheck } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDocFilename } from "@/lib/utils";
 
 
 export const Route = createFileRoute("/app/admin/onboarding")({ component: Page });
@@ -891,7 +891,7 @@ function Requests({ sid }: { sid: string }) {
               selectedRequest.idProofUrl.startsWith("http") || 
               selectedRequest.idProofUrl.startsWith("blob:")
             );
-            const filename = selectedRequest.idProofUrl ? selectedRequest.idProofUrl.replace(/^mock:\/\//, "") : "Submitted_ID_Proof.pdf";
+            const filename = formatDocFilename(selectedRequest.idProofUrl) || "Submitted_ID_Proof.pdf";
 
             return (
               <div className="grid md:grid-cols-2 gap-6 mt-4 pt-1">
