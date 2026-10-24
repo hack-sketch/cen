@@ -40,7 +40,7 @@ def chatbot_query(
 
 @router.post("/match-marketplace", response_model=List[MatchItemResult])
 def match_marketplace(payload: MarketplaceMatchPayload, db: Session = Depends(get_db)):
-    return ai_service.match_marketplace(db, payload.query, payload.society_id)
+    return ai_service.match_marketplace(db, payload.query, payload.society_id, payload.kind)
 
 
 @router.post("/auto-tag", response_model=AutoTagResult)

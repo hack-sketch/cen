@@ -216,6 +216,11 @@ def test_event_update_complete_and_delete_lifecycle(client, db_session):
     assert complete_resp.status_code == 200
     assert complete_resp.json()["status"] == "completed"
 
+    # Attempting to volunteer on completed event fails with 400
+    vol_attempt = client.post(f"/api/v1/events/{event_id}/volunteer", headers=headers)
+    assert vol_attempt.status_code == 400
+    assert "completed event" in vol_attempt.json()["detail"]
+
     # 4. Delete Event
     del_resp = client.delete(f"/api/v1/events/{event_id}", headers=headers)
     assert del_resp.status_code == 200

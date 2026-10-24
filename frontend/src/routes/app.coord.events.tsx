@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Plus, Sparkles, UserPlus, UserX, AlertCircle, CheckCircle2, Lightbulb, Palette, Pencil, Trash2, CheckCircle, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatEventTimeRange } from "@/lib/utils";
 import { EventCalendar, type CalendarEvent } from "@/components/calendar/EventCalendar";
 import {
   AlertDialog,
@@ -88,8 +88,8 @@ function Page() {
     }
     setCheckingClash(true);
     try {
-      const st = targetForm.date && targetForm.startTime ? `${targetForm.date}T${targetForm.startTime}:00Z` : `${targetForm.date}T09:00:00Z`;
-      const et = targetForm.date && targetForm.endTime ? `${targetForm.date}T${targetForm.endTime}:00Z` : `${targetForm.date}T17:00:00Z`;
+      const st = targetForm.date && targetForm.startTime ? `${targetForm.date}T${targetForm.startTime}:00` : `${targetForm.date}T09:00:00`;
+      const et = targetForm.date && targetForm.endTime ? `${targetForm.date}T${targetForm.endTime}:00` : `${targetForm.date}T17:00:00`;
       const res = await checkEventClash(targetForm.title, targetForm.description, st, et, sid);
       setClashResult(res);
       if (res.hasClash) {
@@ -131,8 +131,8 @@ function Page() {
   const openEditModal = (ev: any) => {
     const rawSt = ev.startTime || "";
     const rawEt = ev.endTime || "";
-    const startTimeHour = rawSt.includes("T") ? rawSt.split("T")[1].slice(0, 5) : "09:00";
-    const endTimeHour = rawEt.includes("T") ? rawEt.split("T")[1].slice(0, 5) : "17:00";
+    const startTimeHour = rawSt.includes("T") ? rawSt.split("T")[1].slice(0, 5) : (rawSt.slice(0, 5) || "09:00");
+    const endTimeHour = rawEt.includes("T") ? rawEt.split("T")[1].slice(0, 5) : (rawEt.slice(0, 5) || "17:00");
     setEditingEvent(ev);
     setEditForm({
       id: ev.id,
@@ -154,8 +154,8 @@ function Page() {
       return;
     }
     try {
-      const st = `${editForm.date}T${editForm.startTime || "09:00"}:00Z`;
-      const et = `${editForm.date}T${editForm.endTime || "17:00"}:00Z`;
+      const st = `${editForm.date}T${editForm.startTime || "09:00"}:00`;
+      const et = `${editForm.date}T${editForm.endTime || "17:00"}:00`;
       await eventService.update(editForm.id, {
         title: editForm.title,
         description: editForm.description,
@@ -178,8 +178,8 @@ function Page() {
   const calendarEvents: CalendarEvent[] = (events.data || []).map((e) => ({
     id: e.id,
     title: e.title,
-    startTime: e.startTime || `${e.date}T09:00:00Z`,
-    endTime: e.endTime || `${e.date}T17:00:00Z`,
+    startTime: e.startTime || (e.date ? `${e.date}T09:00:00` : undefined),
+    endTime: e.endTime || (e.date ? `${e.date}T17:00:00` : undefined),
     date: e.date,
     color: e.color || "#d1fae5",
     textColor: e.textColor || "#065f46",
@@ -316,8 +316,8 @@ function Page() {
                 <Button className="w-full bg-deep-forest hover:bg-deep-forest/90 text-white font-semibold text-xs h-10 rounded-lg shadow-sm cursor-pointer mt-2 active:scale-98 transition-all" onClick={async () => {
                   try {
                     const eventDate = form.date || new Date().toISOString().slice(0, 10);
-                    const st = form.startTime ? `${eventDate}T${form.startTime}:00Z` : `${eventDate}T09:00:00Z`;
-                    const et = form.endTime ? `${eventDate}T${form.endTime}:00Z` : `${eventDate}T17:00:00Z`;
+                    const st = form.startTime ? `${eventDate}T${form.startTime}:00` : `${eventDate}T09:00:00`;
+                    const et = form.endTime ? `${eventDate}T${form.endTime}:00` : `${eventDate}T17:00:00`;
                     await eventService.create({
                       title: form.title,
                       description: form.description,
@@ -471,12 +471,22 @@ function Page() {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-on-surface-variant mt-1">Scheduled: <span className="font-semibold text-ink">{e.date}</span> · Capacity: <span className="font-semibold text-ink">{e.volunteers.length} / {e.volunteersNeeded}</span> Volunteers</p>
+                          <p className="text-xs text-on-surface-variant mt-1 flex items-center gap-2 flex-wrap">
+                            <span>Scheduled: <span className="font-semibold text-ink">{e.date}</span></span>
+                            <span>·</span>
+                            <span>Time: <span className="font-semibold text-ink">{formatEventTimeRange(e.startTime, e.endTime)}</span></span>
+                            <span>·</span>
+                            <span>Capacity: <span className="font-semibold text-ink">{e.volunteers.length} / {e.volunteersNeeded}</span> Volunteers</span>
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto flex-shrink-0 w-full sm:w-auto">
-                        <SuggestButton eventId={e.id} eventTitle={e.title} />
-                        <ManualInviteButton eventId={e.id} eventTitle={e.title} sid={sid} />
+                        {e.status !== "completed" && e.status !== "cancelled" && (
+                          <>
+                            <SuggestButton eventId={e.id} eventTitle={e.title} />
+                            <ManualInviteButton eventId={e.id} eventTitle={e.title} sid={sid} />
+                          </>
+                        )}
                         
                         <Button
                           variant="outline"
@@ -646,8 +656,12 @@ function Page() {
               </div>
 
               <div className="flex items-center gap-2 pt-3 border-t border-line/30 flex-wrap">
-                <SuggestButton eventId={selectedEvent.id} eventTitle={selectedEvent.title} />
-                <ManualInviteButton eventId={selectedEvent.id} eventTitle={selectedEvent.title} sid={sid} />
+                {selectedEvent.status !== "completed" && selectedEvent.status !== "cancelled" && (
+                  <>
+                    <SuggestButton eventId={selectedEvent.id} eventTitle={selectedEvent.title} />
+                    <ManualInviteButton eventId={selectedEvent.id} eventTitle={selectedEvent.title} sid={sid} />
+                  </>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

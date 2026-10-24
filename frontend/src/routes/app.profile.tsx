@@ -319,14 +319,14 @@ function Page() {
             </Card>
           )}
 
-          {/* Community Interests & Skills Survey (Non-owners only) */}
-          {!isOwner && user!.societyId && (
+          {/* Community Interests & Skills Survey (Residents & Coordinators only) */}
+          {user?.societyId && (user.role === "resident" || user.role === "coordinator") && (
             <ProfileSurveyCard user={user!} />
           )}
 
 
-          {/* Leave Society Action Card (Non-owners only) */}
-          {!isOwner && user!.societyId && (
+          {/* Leave Society Action Card (Residents and Coordinators only) */}
+          {user?.societyId && (user.role === "resident" || user.role === "coordinator") && (
             <Card className="border-rose-200 shadow-sm bg-rose-50/30">
               <CardHeader className="pb-3 border-b border-rose-100">
                 <CardTitle className="text-sm font-bold text-rose-900 flex items-center gap-2">
@@ -349,6 +349,29 @@ function Page() {
                 >
                   Leave Society
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Official Society Administration Desk Governance Card (Admins only) */}
+          {user?.societyId && user.role === "admin" && (
+            <Card className="border-deep-forest/20 shadow-sm bg-emerald-50/30">
+              <CardHeader className="pb-3 border-b border-emerald-100">
+                <CardTitle className="text-sm font-bold text-deep-forest flex items-center gap-2">
+                  <Building className="h-4 w-4 text-deep-forest" />
+                  Official Society Administration Desk
+                </CardTitle>
+                <CardDescription className="text-xs text-emerald-800">
+                  Active administrator authority for <span className="font-bold">{soc.data?.name || "this community"}</span>.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 flex items-center justify-between gap-4">
+                <span className="text-[11px] text-emerald-900/80 leading-relaxed">
+                  This account manages society configuration, flat capacity, and coordinator assignments. Institutional administration transfer and society decommissioning are governed by the Platform Owner.
+                </span>
+                <Badge variant="outline" className="bg-white text-deep-forest border-emerald-300 text-[10px] font-bold uppercase tracking-wider py-1 px-2.5 flex-shrink-0">
+                  Institutional Desk
+                </Badge>
               </CardContent>
             </Card>
           )}

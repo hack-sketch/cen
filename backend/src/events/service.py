@@ -121,6 +121,11 @@ def request_to_volunteer(db: Session, resident: User, event_id: str) -> Voluntee
     if not event:
         raise NotFoundException(f"Event with ID '{event_id}' not found")
 
+    if event.status == "completed":
+        raise APIException(status_code=400, detail="Cannot volunteer for a completed event.", code="EVENT_COMPLETED")
+    if event.status == "cancelled":
+        raise APIException(status_code=400, detail="Cannot volunteer for a cancelled event.", code="EVENT_CANCELLED")
+
     existing = (
         db.query(VolunteerRequest)
         .filter(VolunteerRequest.event_id == event_id, VolunteerRequest.resident_id == resident.id)
@@ -156,6 +161,11 @@ def invite_volunteer(
     event = db.query(EventItem).filter(EventItem.id == event_id).first()
     if not event:
         raise NotFoundException(f"Event with ID '{event_id}' not found")
+
+    if event.status == "completed":
+        raise APIException(status_code=400, detail="Cannot invite volunteers to a completed event.", code="EVENT_COMPLETED")
+    if event.status == "cancelled":
+        raise APIException(status_code=400, detail="Cannot invite volunteers to a cancelled event.", code="EVENT_CANCELLED")
 
     resident = db.query(User).filter(User.id == resident_id).first()
     if not resident:
@@ -194,18 +204,22 @@ def approve_volunteer_request(db: Session, current_user: User, request_id: str) 
     if not vr:
         raise NotFoundException(f"Volunteer request with ID '{request_id}' not found")
 
+    event = db.query(EventItem).filter(EventItem.id == vr.event_id).first()
+    if not event:
+        raise NotFoundException("Associated event not found")
+    if event.status in ["completed", "cancelled"]:
+        raise APIException(status_code=400, detail="Cannot approve requests for a completed or cancelled event.", code="EVENT_CLOSED")
+
     if current_user.role not in ["owner", "admin", "coordinator"] and vr.resident_id != current_user.id:
         raise ForbiddenException("You can only accept volunteer invitations addressed to you.")
 
     vr.status = "approved"
 
     # Append to event volunteers list
-    event = db.query(EventItem).filter(EventItem.id == vr.event_id).first()
-    if event:
-        current_list = [u.strip() for u in event.volunteers.split(",") if u.strip()] if event.volunteers else []
-        if vr.resident_id not in current_list:
-            current_list.append(vr.resident_id)
-            event.volunteers = ",".join(current_list)
+    current_list = [u.strip() for u in event.volunteers.split(",") if u.strip()] if event.volunteers else []
+    if vr.resident_id not in current_list:
+        current_list.append(vr.resident_id)
+        event.volunteers = ",".join(current_list)
 
     db.commit()
     db.refresh(vr)

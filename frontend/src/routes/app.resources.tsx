@@ -76,7 +76,7 @@ function Page() {
     if (!queryToRun) return;
     setSearchingAI(true);
     try {
-      const r = await matchSkillResource(queryToRun, sid);
+      const r = await matchSkillResource(queryToRun, sid, "resource");
       setAi(r);
       toast.success(`Found ${r.length} AI matches!`);
     } catch {

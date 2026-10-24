@@ -26,8 +26,5 @@ htmlcov/
 .venv
 venv/
 ENV/
-*.db
-*.sqlite3
-cen.db
 openapi.yaml
 openapi.json

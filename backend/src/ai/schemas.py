@@ -38,6 +38,7 @@ class ChatbotResponsePayload(BaseModel):
 class MarketplaceMatchPayload(BaseModel):
     query: str
     society_id: str
+    kind: Optional[str] = None  # 'skill' | 'resource' | None
 
     model_config = ConfigDict(
         alias_generator=to_camel,

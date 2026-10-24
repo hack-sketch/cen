@@ -185,11 +185,15 @@ export interface MatchResult {
 }
 
 // AI 3 — Natural language skill/resource matching
-export async function matchSkillResource(query: string, societyId: string): Promise<MatchResult[]> {
+export async function matchSkillResource(
+  query: string,
+  societyId: string,
+  kind?: "skill" | "resource"
+): Promise<MatchResult[]> {
   try {
     const res = await apiFetch<MatchResult[]>("/ai/match-marketplace", {
       method: "POST",
-      body: JSON.stringify({ query, societyId }),
+      body: JSON.stringify({ query, societyId, kind }),
     });
     if (Array.isArray(res) && res.length > 0) {
       return res;
@@ -201,12 +205,12 @@ export async function matchSkillResource(query: string, societyId: string): Prom
   const q = query.toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
 
-  const skillHits: MatchResult[] = __mockState.skills
+  const skillHits: MatchResult[] = kind === "resource" ? [] : __mockState.skills
     .filter((s) => s.societyId === societyId && s.status === "approved")
     .map((s) => {
       const titleMatch = s.title.toLowerCase().includes(q);
       const descMatch = s.description.toLowerCase().includes(q);
-      const wordHits = words.filter((w) => s.title.toLowerCase().includes(w) || s.description.toLowerCase().includes(w));
+      const wordHits = words.filter((w) => new RegExp("\\b" + w + "\\b", "i").test(s.title) || new RegExp("\\b" + w + "\\b", "i").test(s.description));
       const score = titleMatch ? 90 : descMatch ? 80 : wordHits.length > 0 ? 60 + wordHits.length * 10 : 0;
       return {
         item: s,
@@ -218,12 +222,12 @@ export async function matchSkillResource(query: string, societyId: string): Prom
       };
     });
 
-  const resHits: MatchResult[] = __mockState.resources
+  const resHits: MatchResult[] = kind === "skill" ? [] : __mockState.resources
     .filter((r) => r.societyId === societyId && r.status === "approved")
     .map((r) => {
       const nameMatch = r.name.toLowerCase().includes(q);
       const descMatch = r.description.toLowerCase().includes(q);
-      const wordHits = words.filter((w) => r.name.toLowerCase().includes(w) || r.description.toLowerCase().includes(w));
+      const wordHits = words.filter((w) => new RegExp("\\b" + w + "\\b", "i").test(r.name) || new RegExp("\\b" + w + "\\b", "i").test(r.description));
       const score = nameMatch ? 90 : descMatch ? 80 : wordHits.length > 0 ? 60 + wordHits.length * 10 : 0;
       return {
         item: r,
@@ -308,11 +312,17 @@ export async function categorizeComplaint(text: string): Promise<{ category: str
   const t = text.toLowerCase();
   let category = "General";
   let priority: "low" | "medium" | "high" = "low";
-  if (/(noise|loud|music)/.test(t)) {
+  if (/(safety|dangerous|threat|violence|fire|smoke|flame|gas|leak|hazard|emergency|spark|flood|electric)/.test(t)) {
+    category = "Safety";
+    priority = "high";
+  } else if (/(noise|loud|music|party|barking)/.test(t)) {
     category = "Noise";
     priority = "medium";
-  } else if (/(safety|dangerous|threat|violence)/.test(t)) {
-    category = "Safety";
+  } else if (/(garden|park|facility|lift|elevator|clean|trash|garbage|bulb|light)/.test(t)) {
+    category = "Facilities";
+    priority = "low";
+  } else if (/(coordinator|admin|management)/.test(t)) {
+    category = "Conduct";
     priority = "high";
   }
   return delay({ category, priority });

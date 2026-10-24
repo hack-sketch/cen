@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Users } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatEventTimeRange } from "@/lib/utils";
 
 import { EventCalendar, type CalendarEvent } from "@/components/calendar/EventCalendar";
 
@@ -24,12 +24,17 @@ function Page() {
   const qc = useQueryClient();
   const events = useQuery({ queryKey: ["ev", sid], queryFn: () => eventService.list(sid) });
   const vrs = useQuery({ queryKey: ["vr", sid], queryFn: () => eventService.listVolunteerRequests(sid) });
-  const myInvites = vrs.data?.filter((v) => v.residentId === user!.id && v.type === "coordinator-invited" && v.status === "pending") ?? [];
+  const myInvites = vrs.data?.filter((v) => {
+    const matchingEvent = events.data?.find((e) => e.id === v.eventId);
+    return v.residentId === user!.id && v.type === "coordinator-invited" && v.status === "pending" && matchingEvent?.status !== "completed" && matchingEvent?.status !== "cancelled";
+  }) ?? [];
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
 
   const renderEventCard = (e: any) => {
     const iAmIn = e.volunteers.includes(user!.id);
     const mySelfReq = vrs.data?.find((v) => v.eventId === e.id && v.residentId === user!.id && v.type === "self-requested");
+    const isCompleted = e.status === "completed";
+    const isCancelled = e.status === "cancelled";
 
     return (
       <Card key={e.id} className="border-line/60 shadow-xs hover:shadow-md transition-shadow bg-white flex flex-col justify-between overflow-hidden rounded-2xl">
@@ -47,13 +52,32 @@ function Page() {
               </Badge>
             </div>
             <div className="text-xs text-on-surface-variant font-medium pt-0.5">
-              Planned Date: <span className="font-semibold text-ink">{e.date}</span> · Roster: <span className="font-semibold text-ink">{e.volunteers.length} / {e.volunteersNeeded}</span> Volunteers
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>Planned Date: <span className="font-semibold text-ink">{e.date}</span></span>
+                <span>·</span>
+                <span>Time: <span className="font-semibold text-ink">{formatEventTimeRange(e.startTime, e.endTime)}</span></span>
+                <span>·</span>
+                <span>Roster: <span className="font-semibold text-ink">{e.volunteers.length} / {e.volunteersNeeded}</span> Volunteers</span>
+              </div>
             </div>
             <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed line-clamp-3">{e.description}</p>
           </div>
 
           <div className="pt-3 border-t border-line/20 mt-auto flex flex-wrap justify-between items-center gap-2">
-            {iAmIn ? (
+            {isCompleted ? (
+              <div className="flex items-center justify-between w-full gap-2">
+                {iAmIn ? (
+                  <Badge className="bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] font-bold uppercase tracking-wider h-8 sm:h-9 px-3 border"><Users className="mr-1.5 h-3.5 w-3.5" /> Volunteered</Badge>
+                ) : null}
+                <Badge variant="outline" className="text-[11px] font-bold uppercase tracking-wider h-8 sm:h-9 px-3 border bg-slate-50 border-slate-200 text-slate-600">
+                  Event Completed
+                </Badge>
+              </div>
+            ) : isCancelled ? (
+              <Badge variant="outline" className="text-[11px] font-bold uppercase tracking-wider h-8 sm:h-9 px-3 border bg-rose-50 border-rose-200 text-rose-700">
+                Event Cancelled
+              </Badge>
+            ) : iAmIn ? (
               <div className="flex items-center justify-between w-full gap-2">
                 <Badge className="bg-emerald-50 border-emerald-200 text-emerald-800 text-[11px] font-bold uppercase tracking-wider h-8 sm:h-9 px-3 border"><Users className="mr-1.5 h-3.5 w-3.5" /> Volunteering</Badge>
                 <LeaveEventDialog eventId={e.id} eventTitle={e.title} />
@@ -102,8 +126,8 @@ function Page() {
   const calendarEvents: CalendarEvent[] = (events.data || []).map((e) => ({
     id: e.id,
     title: e.title,
-    startTime: e.startTime || `${e.date}T09:00:00Z`,
-    endTime: e.endTime || `${e.date}T17:00:00Z`,
+    startTime: e.startTime || (e.date ? `${e.date}T09:00:00` : undefined),
+    endTime: e.endTime || (e.date ? `${e.date}T17:00:00` : undefined),
     date: e.date,
     color: e.color || "#dce8fb",
     textColor: e.textColor || "#1e3a6e",

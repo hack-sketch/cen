@@ -29,6 +29,11 @@ def test_categorize_complaint(client):
     data = resp.json()
     assert data["priority"] == "high"
 
+    fire_resp = client.post("/api/v1/ai/categorize-complaint", json={"text": "Fire in the electrical shaft on 3rd floor"})
+    assert fire_resp.status_code == 200
+    assert fire_resp.json()["priority"] == "high"
+    assert "safety" in fire_resp.json()["category"].lower() or len(fire_resp.json()["category"]) > 0
+
 
 def test_match_marketplace(client, db_session):
     from src.auth.service import create_user
@@ -81,6 +86,24 @@ def test_match_marketplace(client, db_session):
     assert layman_res_data[0]["kind"] == "resource"
     assert layman_res_data[0]["item"]["name"] == "Power Drill Tool"
     assert "drill" in layman_res_data[0]["summary"].lower() or len(layman_res_data[0]["summary"]) > 0
+
+    # 4. Filter strictly by kind="skill"
+    skill_filter_resp = client.post(
+        "/api/v1/ai/match-marketplace",
+        json={"query": "drill", "society_id": soc.id, "kind": "skill"},
+    )
+    assert skill_filter_resp.status_code == 200
+    skill_filter_data = skill_filter_resp.json()
+    assert all(item["kind"] == "skill" for item in skill_filter_data)
+
+    # 5. Filter strictly by kind="resource"
+    res_filter_resp = client.post(
+        "/api/v1/ai/match-marketplace",
+        json={"query": "python", "society_id": soc.id, "kind": "resource"},
+    )
+    assert res_filter_resp.status_code == 200
+    res_filter_data = res_filter_resp.json()
+    assert all(item["kind"] == "resource" for item in res_filter_data)
 
 
 

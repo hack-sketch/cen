@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { isSameDay, startOfDay, addDays, subDays, startOfWeek, endOfWeek, format } from "date-fns";
+import { formatEventTime, formatEventTimeRange } from "@/lib/utils";
 
 export type CalendarViewType = "Month" | "Week" | "Schedule";
 
@@ -47,14 +48,26 @@ function getCalendarGrid(year: number, month: number): Date[][] {
 }
 
 function getEventStart(ev: CalendarEvent): Date {
-  if (ev.startTime) return new Date(ev.startTime);
+  if (ev.startTime) {
+    const clean = ev.startTime.replace(/Z$/, "");
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) return d;
+  }
   if (ev.date) return new Date(`${ev.date}T09:00:00`);
   return new Date();
 }
 
 function getEventEnd(ev: CalendarEvent): Date {
-  if (ev.endTime) return new Date(ev.endTime);
-  if (ev.startTime) return new Date(ev.startTime);
+  if (ev.endTime) {
+    const clean = ev.endTime.replace(/Z$/, "");
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (ev.startTime) {
+    const clean = ev.startTime.replace(/Z$/, "");
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) return d;
+  }
   if (ev.date) return new Date(`${ev.date}T17:00:00`);
   return new Date();
 }
@@ -86,6 +99,8 @@ function EventPill({
   isStart: boolean;
   isEnd: boolean;
 }) {
+  const formattedTime = formatEventTime(ev.startTime);
+
   return (
     <div
       onClick={(e) => {
@@ -102,14 +117,24 @@ function EventPill({
       }}
     >
       <div
-        className="w-full h-full flex items-center px-2 text-[11px] font-semibold truncate transition-opacity group-hover:opacity-85 shadow-2xs"
+        className="w-full h-full flex items-center px-2 text-[10.5px] font-semibold truncate transition-opacity group-hover:opacity-85 shadow-2xs gap-1"
         style={{
           backgroundColor: ev.color || "#dce8fb",
           color: ev.textColor || "#1e3a6e",
           borderRadius: `${isStart ? "5px" : "0"} ${isEnd ? "5px" : "0"} ${isEnd ? "5px" : "0"} ${isStart ? "5px" : "0"}`,
         }}
+        title={`${ev.title} (${formattedTime || "09:00 AM"})`}
       >
-        {isStart ? ev.title : ""}
+        {isStart ? (
+          <>
+            {formattedTime && (
+              <span className="font-bold opacity-80 shrink-0 text-[9.5px]">
+                {formattedTime}
+              </span>
+            )}
+            <span className="truncate">{ev.title}</span>
+          </>
+        ) : ""}
       </div>
     </div>
   );
@@ -335,9 +360,7 @@ export function EventCalendar({
                     </div>
                   ) : (
                     dayEvents.map((ev) => {
-                      const startTimeStr = ev.startTime
-                        ? new Date(ev.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                        : null;
+                      const timeStr = formatEventTimeRange(ev.startTime, ev.endTime);
                       return (
                         <div
                           key={ev.id}
@@ -352,10 +375,10 @@ export function EventCalendar({
                           <div className="font-bold text-xs line-clamp-2 leading-tight group-hover:underline">
                             {ev.title}
                           </div>
-                          {startTimeStr && (
+                          {timeStr && (
                             <div className="text-[10px] flex items-center gap-1 mt-1 font-semibold opacity-90">
-                              <Clock size={10} />
-                              <span>{startTimeStr}</span>
+                              <Clock size={10} className="shrink-0" />
+                              <span className="truncate">{timeStr}</span>
                             </div>
                           )}
                           {ev.volunteersNeeded !== undefined && (

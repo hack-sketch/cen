@@ -38,11 +38,12 @@ def call_gemini_llm(
         return None
 
     models_to_try = [
-        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
         "gemini-flash-lite-latest",
-        "gemini-2.5-flash",
+        "gemma-4-26b-a4b-it",
         "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
     ]
 
 
@@ -402,13 +403,15 @@ SYNONYM_ONTOLOGY = {
 }
 
 
-def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchItemResult]:
+def match_marketplace(
+    db: Session, query: str, society_id: str, kind: Optional[str] = None
+) -> List[MatchItemResult]:
     q_raw = query.strip()
     q_lower = q_raw.lower()
     
-    # 1. RETRIEVAL STEP (RAG): Retrieve all approved skills and resources in the user's society
-    skills = db.query(Skill).filter(Skill.society_id == society_id, Skill.status == "approved").all()
-    resources = db.query(Resource).filter(Resource.society_id == society_id, Resource.status == "approved").all()
+    # 1. RETRIEVAL STEP (RAG): Retrieve all approved skills and resources in the user's society (filtered by kind if specified)
+    skills = db.query(Skill).filter(Skill.society_id == society_id, Skill.status == "approved").all() if kind != "resource" else []
+    resources = db.query(Resource).filter(Resource.society_id == society_id, Resource.status == "approved").all() if kind != "skill" else []
 
     skills_by_id = {s.id: s for s in skills}
     resources_by_id = {r.id: r for r in resources}
@@ -561,36 +564,42 @@ def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchIte
         score = 0
         matched_reasons = []
 
-        # Exact query match
+        # Title matching
         if q_lower in s_title_lower:
             score += 45
             matched_reasons.append(f"Title matches '{q_raw}'")
-        elif any(t in s_title_lower for t in meaningful_tokens):
-            matching_title_tokens = [t for t in meaningful_tokens if t in s_title_lower]
-            score += 25 * len(matching_title_tokens)
-            matched_reasons.append(f"Keywords in title: {', '.join(matching_title_tokens)}")
+        else:
+            matching_title_tokens = [t for t in meaningful_tokens if bool(re.search(r"\b" + re.escape(t) + r"\b", s_title_lower))]
+            if matching_title_tokens:
+                score += 25 * len(matching_title_tokens)
+                matched_reasons.append(f"Keywords in title: {', '.join(matching_title_tokens)}")
 
         if q_lower in s_desc_lower:
             score += 30
             matched_reasons.append("Exact phrase in description")
         else:
-            matching_desc_tokens = [t for t in meaningful_tokens if t in s_desc_lower]
+            matching_desc_tokens = [t for t in meaningful_tokens if bool(re.search(r"\b" + re.escape(t) + r"\b", s_desc_lower))]
             if matching_desc_tokens:
                 score += 15 * len(matching_desc_tokens)
                 matched_reasons.append(f"Description matches: {', '.join(matching_desc_tokens[:3])}")
 
         # Category and synonym match
-        if s.category in matched_categories or s_cat_lower in q_lower or any(t in s_cat_lower for t in meaningful_tokens):
+        cat_matches = (
+            s.category in matched_categories
+            or any(bool(re.search(r"\b" + re.escape(c.lower()) + r"\b", s_cat_lower)) for c in matched_categories)
+            or any(bool(re.search(r"\b" + re.escape(t) + r"\b", s_cat_lower)) for t in meaningful_tokens)
+        )
+        if cat_matches:
             score += 25
             matched_reasons.append(f"Category '{s.category}' matches your intent")
 
         # Tags match
-        matching_tags = [t for t in tags_list if t in q_lower or any(token in t for token in meaningful_tokens)]
+        matching_tags = [t for t in tags_list if t in q_lower or any(bool(re.search(r"\b" + re.escape(token) + r"\b", t)) for token in meaningful_tokens)]
         if matching_tags:
             score += 20 * len(matching_tags)
             matched_reasons.append(f"Tags match: {', '.join(matching_tags)}")
 
-        if score > 0:
+        if score >= 35:
             summary = f"Expert {s.category} service: '{s.title}' offered by {s.provider_name} ({s.credits} Credits). {s.description.strip()}"
             if len(summary) > 135:
                 summary = summary[:132] + "..."
@@ -599,7 +608,7 @@ def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchIte
             if not intent_tags:
                 intent_tags = [s.category, "Skill Exchange"]
 
-            norm_score = min(98, max(55, score))
+            norm_score = min(98, max(60, score))
             reason = " · ".join(matched_reasons[:2]) if matched_reasons else f"Matches your search for {s.category}"
 
             item_dict = {
@@ -628,8 +637,7 @@ def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchIte
                 )
             )
 
-    # Query resources in society
-    resources = db.query(Resource).filter(Resource.society_id == society_id, Resource.status == "approved").all()
+    # Evaluate resources in society
     for r in resources:
         r_name_lower = r.name.lower()
         r_desc_lower = r.description.lower()
@@ -642,33 +650,39 @@ def match_marketplace(db: Session, query: str, society_id: str) -> List[MatchIte
         if q_lower in r_name_lower:
             score += 45
             matched_reasons.append(f"Resource name matches '{q_raw}'")
-        elif any(t in r_name_lower for t in meaningful_tokens):
-            matching_name_tokens = [t for t in meaningful_tokens if t in r_name_lower]
-            score += 25 * len(matching_name_tokens)
-            matched_reasons.append(f"Name matches: {', '.join(matching_name_tokens)}")
+        else:
+            matching_name_tokens = [t for t in meaningful_tokens if bool(re.search(r"\b" + re.escape(t) + r"\b", r_name_lower))]
+            if matching_name_tokens:
+                score += 25 * len(matching_name_tokens)
+                matched_reasons.append(f"Name matches: {', '.join(matching_name_tokens)}")
 
         if q_lower in r_desc_lower:
             score += 30
             matched_reasons.append("Exact phrase in item description")
         else:
-            matching_desc_tokens = [t for t in meaningful_tokens if t in r_desc_lower]
+            matching_desc_tokens = [t for t in meaningful_tokens if bool(re.search(r"\b" + re.escape(t) + r"\b", r_desc_lower))]
             if matching_desc_tokens:
                 score += 15 * len(matching_desc_tokens)
                 matched_reasons.append(f"Description matches: {', '.join(matching_desc_tokens[:3])}")
 
         # Category and synonym match
-        if r.category in matched_categories or r_cat_lower in q_lower or any(t in r_cat_lower for t in meaningful_tokens):
+        cat_matches = (
+            r.category in matched_categories
+            or any(bool(re.search(r"\b" + re.escape(c.lower()) + r"\b", r_cat_lower)) for c in matched_categories)
+            or any(bool(re.search(r"\b" + re.escape(t) + r"\b", r_cat_lower)) for t in meaningful_tokens)
+        )
+        if cat_matches:
             score += 25
             matched_reasons.append(f"Category '{r.category}' fits your requirements")
 
-        if score > 0:
+        if score >= 35:
             summary = f"Shared {r.category} equipment: '{r.name}' available to borrow from {r.owner_name} ({r.credits} Credits). {r.description.strip()}"
             if len(summary) > 135:
                 summary = summary[:132] + "..."
 
             intent_tags = list(dict.fromkeys([r.category, "Available to Borrow", *[c for c in matched_categories if c != r.category]]))[:3]
 
-            norm_score = min(98, max(55, score))
+            norm_score = min(98, max(60, score))
             reason = " · ".join(matched_reasons[:2]) if matched_reasons else f"Available resource in {r.category}"
 
             item_dict = {
@@ -752,6 +766,10 @@ def auto_tag(text: str) -> AutoTagResult:
 def categorize_complaint(text: str) -> CategorizeComplaintResult:
     prompt = (
         f"Classify the following community complaint:\n\"{text}\"\n"
+        "Priority guidelines:\n"
+        "- high: urgent safety hazards, fire, smoke, gas leaks, electrical danger, threats, water floods\n"
+        "- medium: active noise disturbance, sanitation, broken common utilities\n"
+        "- low: minor maintenance, aesthetics, gardening, general suggestions\n"
         "Return ONLY a JSON object in this format: {\"category\": \"<Category>\", \"priority\": \"<low|medium|high>\"}"
     )
 
@@ -773,16 +791,16 @@ def categorize_complaint(text: str) -> CategorizeComplaintResult:
     category = "General"
     priority = "low"
 
-    if re.search(r"(noise|loud|music)", t):
-        category = "Noise"
-        priority = "medium"
-    elif re.search(r"(safety|dangerous|threat|violence)", t):
+    if re.search(r"(safety|dangerous|threat|violence|fire|smoke|flame|gas|leak|hazard|emergency|spark|flood|electric)", t):
         category = "Safety"
         priority = "high"
-    elif re.search(r"(garden|park|facility|lift|elevator)", t):
+    elif re.search(r"(noise|loud|music|party|barking)", t):
+        category = "Noise"
+        priority = "medium"
+    elif re.search(r"(garden|park|facility|lift|elevator|clean|trash|garbage|bulb|light)", t):
         category = "Facilities"
         priority = "low"
-    elif re.search(r"(coordinator|admin)", t):
+    elif re.search(r"(coordinator|admin|management)", t):
         category = "Conduct"
         priority = "high"
 
